@@ -14,6 +14,9 @@ const messageCache = new Map();
 const CACHE_SIZE = 50;
 const CACHE_TTL = 30 * 60 * 1000; // 30 minut
 
+// Licznik do logowania postępu analizy
+let analysisStats = { total: 0, found: 0, errors: 0 };
+
 /**
  * Dodaje wiadomość do cache kontekstowego
  * @param {string} channelId - ID kanału
@@ -30,16 +33,13 @@ function addToCache(channelId, message) {
     content: message.content,
     timestamp: Date.now(),
     id: message.id,
-    // Jeśli wiadomość jest odpowiedzią, zapisz ID wiadomości-rodzica
     replyTo: message.reference?.messageId || null,
   });
 
-  // Ogranicz rozmiar cache
   if (cache.length > CACHE_SIZE) {
     cache.shift();
   }
 
-  // Usuń stare wpisy
   const now = Date.now();
   const filtered = cache.filter((m) => now - m.timestamp < CACHE_TTL);
   messageCache.set(channelId, filtered);
@@ -74,43 +74,39 @@ async function analyzeMessage(message) {
   // Dodaj bieżącą wiadomość do cache
   addToCache(channelId, message);
 
-  const prompt = `Jesteś asystentem analizującym rozmowy o filmach, serialach i muzyce na serwerze Discord.
+  // Pomijaj bardzo krótkie wiadomości (emoji, "xD", "ok" itp.)
+  if (message.content.length < 5) {
+    return null;
+  }
 
-ZADANIE:
-Przeanalizuj poniższą wiadomość i określ:
-1. Czy dotyczy filmu, serialu lub muzyki?
-2. Jaki jest tytuł (jeśli wymieniony)?
-3. Czy wiadomość zawiera SPOILERY?
-4. Krótki fragment rozmowy (max 100 znaków) BEZ spoilerów
+  const prompt = `Analizujesz wiadomości z polskiego kanału Discord o nazwie "kulturka" - kanał poświęcony filmom, serialom i muzyce.
+
+ZADANIE: Sprawdź czy wiadomość wspomina o jakimkolwiek filmie, serialu, anime, muzyce (artysta, album, piosenka) lub grze.
 
 KONTEKST POPRZEDNICH WIADOMOŚCI:
 ${context}
 
 WIADOMOŚĆ DO ANALIZY:
-${message.content}
+"${message.content}"
 
-ODPOWIEDZ WYŁĄCZNIE W FORMACIE JSON (bez dodatkowego tekstu):
-{
-  "is_media_related": boolean,
-  "media_type": "film" | "serial" | "music" | null,
-  "title": string | null,
-  "has_spoilers": boolean,
-  "safe_snippet": string | null,
-  "context_reference": string | null
-}
+Odpowiedz TYLKO formatem JSON:
+{"is_media_related":true/false,"media_type":"film"/"serial"/"music"/null,"title":"tytuł lub null","has_spoilers":true/false,"safe_snippet":"fragment bez spoilerów max 100 znaków lub null","context_reference":null}
 
-ZASADY:
-- Jeśli ktoś pisze "też mi się podobało" bez nazwy, sprawdź kontekst i przypisz do ostatniego tytułu
-- Fragmenty ze spoilerami CAŁKOWICIE POMIŃ - safe_snippet powinien być null
-- Bądź konserwatywny - wątpliwości = spoiler
-- Polski język traktuj jako podstawowy
-- Jeśli wiadomość nie dotyczy żadnych mediów, ustaw is_media_related na false
-- Tytuły podawaj w oryginalnej formie (nie tłumacz)`;
+WAŻNE ZASADY:
+- Kanał jest o kulturze - bądź OTWARTY na wykrywanie tytułów. Nawet krótkie odniesienia się liczą
+- Polskie i angielskie tytuły - oba akceptuj
+- Jeśli ktoś pisze zdanie o serialu/filmie ale nie wymienia tytułu, sprawdź kontekst poprzednich wiadomości
+- "Rycerz", "Pingwin", "Bialy Lotos" itp. - to mogą być tytuły seriali, rozpoznawaj je
+- Anime traktuj jako "serial"
+- Gry traktuj jako "film" (brak osobnej kategorii)
+- Jeśli wiadomość to tylko emoji, reakcja, pozdrowienie - is_media_related: false
+- Spoilery: jeśli ktoś opisuje fabułę/zakończenie/twist - has_spoilers: true, safe_snippet: null
+- Nie spoiler: ogólna opinia ("fajny", "nudny", "polecam") - has_spoilers: false`;
 
   try {
     const response = await client.messages.create({
       model: 'claude-3-haiku-20240307',
-      max_tokens: 500,
+      max_tokens: 300,
       messages: [
         {
           role: 'user',
@@ -121,7 +117,7 @@ ZASADY:
 
     const responseText = response.content[0].text.trim();
 
-    // Wyciągnij JSON z odpowiedzi (może być otoczony blokiem kodu)
+    // Wyciągnij JSON z odpowiedzi
     let jsonStr = responseText;
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -129,21 +125,29 @@ ZASADY:
     }
 
     const result = JSON.parse(jsonStr);
+    analysisStats.total++;
 
     if (result.is_media_related && result.title) {
-      logger.info(`AI detected: "${result.title}" (${result.media_type}) - spoilers: ${result.has_spoilers}`);
+      analysisStats.found++;
+      logger.info(`AI detected: "${result.title}" (${result.media_type}) in: "${truncate(message.content, 60)}"`);
       return result;
     }
 
-    // Jeśli jest odwołanie do kontekstu ale bez tytułu, spróbuj powiązać
+    // Jeśli jest odwołanie do kontekstu ale bez tytułu
     if (result.is_media_related && result.context_reference) {
-      logger.info(`AI detected context reference: "${result.context_reference}"`);
+      logger.info(`AI context ref: "${result.context_reference}" in: "${truncate(message.content, 60)}"`);
       return result;
+    }
+
+    // Loguj co 50 wiadomości żeby wiedzieć że działa
+    if (analysisStats.total % 50 === 0) {
+      logger.info(`Analysis progress: ${analysisStats.total} processed, ${analysisStats.found} found, ${analysisStats.errors} errors`);
     }
 
     return null;
   } catch (error) {
-    logger.error('AI analysis failed', error.message);
+    analysisStats.errors++;
+    logger.error(`AI analysis failed for: "${truncate(message.content, 60)}"`, error.message);
     return null;
   }
 }
