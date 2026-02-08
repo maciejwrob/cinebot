@@ -1,17 +1,18 @@
-// Komenda /top-seriale - wyświetla ranking najpopularniejszych seriali
+// Komenda /top-seriale - kompaktowa lista wszystkich seriali
 
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const database = require('../database');
-const { periodToSql, formatMentionCount, truncate } = require('../utils/helpers');
+const { periodToSql } = require('../utils/helpers');
+const { buildTopEmbed, ITEMS_PER_PAGE } = require('../utils/top-embed');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('top-seriale')
-    .setDescription('Pokaż najpopularniejsze seriale na serwerze')
+    .setDescription('Pokaż wszystkie seriale omawiane na serwerze')
     .addStringOption((option) =>
       option
         .setName('okres')
-        .setDescription('Okres czasowy rankingu')
+        .setDescription('Okres czasowy')
         .setRequired(false)
         .addChoices(
           { name: 'Tydzień', value: 'tydzien' },
@@ -24,7 +25,7 @@ module.exports = {
   async execute(interaction) {
     const period = interaction.options.getString('okres') || 'tydzien';
     const { clause, label } = periodToSql(period);
-    const results = database.getTopMedia('serial', clause, 10);
+    const results = database.getTopMedia('serial', clause);
 
     if (results.length === 0) {
       return interaction.reply({
@@ -33,37 +34,28 @@ module.exports = {
       });
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle(`📺 Top Seriale - ${label}`)
-      .setColor(0x3498db)
-      .setTimestamp();
+    const { embed, row } = buildTopEmbed(results, '📺 Seriale', 0x3498db, label, 0);
+    const options = { embeds: [embed] };
+    if (row) options.components = [row];
 
-    const medals = ['🥇', '🥈', '🥉'];
-    const numbers = ['4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    const reply = await interaction.reply({ ...options, fetchReply: true });
 
-    const description = results
-      .map((row, i) => {
-        const icon = i < 3 ? medals[i] : numbers[i - 3] || `**${i + 1}.**`;
-        const users = row.users
-          ? row.users.split(',').slice(0, 3).join(', ')
-          : 'Brak danych';
-        const snippet = row.snippet ? `💬 "${truncate(row.snippet, 80)}"` : '';
-        const link = row.first_link ? `[Zobacz rozmowę](${row.first_link})` : '';
+    if (results.length > ITEMS_PER_PAGE) {
+      const collector = reply.createMessageComponentCollector({ time: 300000 });
+      let currentPage = 0;
 
-        return [
-          `${icon} **${row.title}** (${formatMentionCount(row.mention_count)})`,
-          `   👥 Polecali: ${users}`,
-          snippet ? `   ${snippet}` : '',
-          link ? `   🔗 ${link}` : '',
-        ]
-          .filter(Boolean)
-          .join('\n');
-      })
-      .join('\n\n');
+      collector.on('collect', async (btn) => {
+        if (btn.user.id !== interaction.user.id) {
+          return btn.reply({ content: 'To nie Twoja komenda.', ephemeral: true });
+        }
+        if (btn.customId.startsWith('top_next')) currentPage++;
+        if (btn.customId.startsWith('top_prev')) currentPage--;
 
-    embed.setDescription(description);
-    embed.setFooter({ text: `📊 Ranking z okresu: ${label}` });
-
-    return interaction.reply({ embeds: [embed] });
+        const { embed: newEmbed, row: newRow } = buildTopEmbed(results, '📺 Seriale', 0x3498db, label, currentPage);
+        const opts = { embeds: [newEmbed] };
+        opts.components = newRow ? [newRow] : [];
+        await btn.update(opts);
+      });
+    }
   },
 };

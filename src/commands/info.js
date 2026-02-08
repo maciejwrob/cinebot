@@ -81,12 +81,18 @@ module.exports = {
       }
     }
 
-    // Linki do rozmów
+    // Linki do rozmów z datami
     if (info.links.length > 0) {
       const linksText = info.links
-        .map((l, i) => `[Rozmowa ${i + 1}](${l})`)
-        .join(' | ');
-      embed.addFields({ name: '🔗 Linki do rozmów', value: linksText });
+        .map((l) => {
+          const date = l.mentioned_at.substring(0, 10); // YYYY-MM-DD
+          return `• [${date} — ${l.user_name}](${l.message_link})`;
+        })
+        .join('\n');
+      embed.addFields({
+        name: `🔗 Ostatnie rozmowy (${Math.min(info.links.length, 10)} z ${info.total_mentions})`,
+        value: truncate(linksText, 1024),
+      });
     }
 
     return interaction.reply({ embeds: [embed] });

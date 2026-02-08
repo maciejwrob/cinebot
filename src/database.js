@@ -119,14 +119,13 @@ function findActiveThread(title, channelId) {
  * @param {number} [limit=10] - Maksymalna liczba wyników
  * @returns {Array} Ranking
  */
-function getTopMedia(type, periodClause, limit = 10) {
+function getTopMedia(type, periodClause, limit = 999) {
   const stmt = db.prepare(`
     SELECT
       title,
       COUNT(*) as mention_count,
-      GROUP_CONCAT(DISTINCT user_name) as users,
-      MIN(context_snippet) as snippet,
-      MIN(message_link) as first_link
+      COUNT(DISTINCT user_id) as unique_users,
+      GROUP_CONCAT(DISTINCT user_name) as users
     FROM media_mentions
     WHERE type = ? AND ${periodClause}
     GROUP BY title
@@ -180,13 +179,13 @@ function getMediaInfo(title) {
   `);
   const snippets = snippetsStmt.all(title);
 
-  // Linki do rozmów
+  // Linki do rozmów z datami (ostatnie 10)
   const linksStmt = db.prepare(`
-    SELECT DISTINCT message_link
+    SELECT message_link, mentioned_at, user_name
     FROM media_mentions
-    WHERE LOWER(title) = LOWER(?)
+    WHERE LOWER(title) = LOWER(?) AND message_link != ''
     ORDER BY mentioned_at DESC
-    LIMIT 5
+    LIMIT 10
   `);
   const links = linksStmt.all(title);
 
@@ -194,7 +193,7 @@ function getMediaInfo(title) {
     ...stats,
     users,
     snippets: snippets.map((s) => s.context_snippet),
-    links: links.map((l) => l.message_link),
+    links,
   };
 }
 
