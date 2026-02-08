@@ -13,7 +13,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('skanuj')
     .setDescription('[Admin] Przeskanuj historię kanału i przeanalizuj wzmianki o mediach')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addIntegerOption((option) =>
       option
         .setName('dni')
