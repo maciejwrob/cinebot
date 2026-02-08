@@ -1,6 +1,6 @@
 // Komenda /skanuj - jednorazowe skanowanie historii kanału
 
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const logger = require('../utils/logger');
 const database = require('../database');
 const aiAnalyzer = require('../ai-analyzer');
@@ -12,14 +12,15 @@ const API_DELAY = 1500; // 1.5s
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('skanuj')
-    .setDescription('Przeskanuj historię kanału i przeanalizuj wzmianki o mediach')
+    .setDescription('[Admin] Przeskanuj historię kanału i przeanalizuj wzmianki o mediach')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addIntegerOption((option) =>
       option
         .setName('dni')
-        .setDescription('Ile dni wstecz skanować (domyślnie 7, max 30)')
+        .setDescription('Ile dni wstecz skanować (domyślnie 7, max 365)')
         .setRequired(false)
         .setMinValue(1)
-        .setMaxValue(30)
+        .setMaxValue(365)
     ),
 
   async execute(interaction) {
