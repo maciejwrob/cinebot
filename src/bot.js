@@ -35,6 +35,7 @@ function createClient() {
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
+      GatewayIntentBits.GuildMessageTyping,
     ],
   });
 
@@ -200,8 +201,11 @@ function setupEventHandlers(client) {
     // Ignoruj wiadomości od botów i własne
     if (message.author.bot) return;
 
-    // Sprawdź czy to monitorowany kanał
-    if (message.channel.id !== process.env.MONITORED_CHANNEL_ID) return;
+    // Sprawdź czy to monitorowany kanał lub thread wewnątrz niego
+    const channelId = message.channel.isThread()
+      ? message.channel.parentId
+      : message.channel.id;
+    if (channelId !== process.env.MONITORED_CHANNEL_ID) return;
 
     // Dodaj do kolejki analizy
     if (messageQueue.length < MAX_QUEUE_SIZE) {
