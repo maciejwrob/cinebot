@@ -6,8 +6,8 @@ const database = require('../database');
 const aiAnalyzer = require('../ai-analyzer');
 const { generateThreadId, createMessageLink } = require('../utils/helpers');
 
-// Czas oczekiwania między requestami do Claude API (rate limiting)
-const API_DELAY = 1500; // 1.5s
+// Szybszy delay - Haiku jest szybki i tani
+const API_DELAY = 500; // 0.5s
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -36,9 +36,9 @@ module.exports = {
       });
     }
 
-    // Odpowiedz od razu - skanowanie trwa długo
+    // Odpowiedz od razu
     await interaction.reply({
-      content: `🔍 Rozpoczynam skanowanie kanału z ostatnich **${days} dni**. To może potrwać kilka minut...`,
+      content: `🔍 Rozpoczynam skanowanie kanału z ostatnich **${days} dni**...`,
     });
 
     try {
@@ -49,7 +49,7 @@ module.exports = {
       let lastMessageId = null;
       let fetching = true;
 
-      // Pobieraj wiadomości partiami po 100 (limit Discord API)
+      // Pobieraj wiadomości partiami po 100
       while (fetching) {
         const options = { limit: 100 };
         if (lastMessageId) options.before = lastMessageId;
@@ -61,21 +61,17 @@ module.exports = {
         }
 
         for (const [, msg] of batch) {
-          // Sprawdź czy wiadomość jest w zakresie dat
           if (msg.createdAt < cutoffDate) {
             fetching = false;
             break;
           }
-          // Ignoruj wiadomości botów
           if (!msg.author.bot) {
             allMessages.push(msg);
           }
         }
 
         lastMessageId = batch.last().id;
-
-        // Krótka przerwa żeby nie przekroczyć rate limitu Discord API
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 200));
       }
 
       if (allMessages.length === 0) {
@@ -84,15 +80,17 @@ module.exports = {
         });
       }
 
-      // Sortuj chronologicznie (najstarsze najpierw) dla lepszego kontekstu
+      // Sortuj chronologicznie
       allMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
-      await interaction.editReply({
-        content: `🔍 Znaleziono **${allMessages.length}** wiadomości. Analizuję... (0/${allMessages.length})`,
-      });
+      // Wyslij osobna wiadomosc z postepem (interaction.editReply wygasa po 15min)
+      const progressMsg = await channel.send(
+        `🔍 Skanowanie: znaleziono **${allMessages.length}** wiadomości. Analizuję...`
+      );
 
       let analyzed = 0;
       let found = 0;
+      let errors = 0;
 
       for (const message of allMessages) {
         try {
@@ -102,7 +100,6 @@ module.exports = {
             const channelId = message.channel.id;
             const guildId = message.guild?.id;
 
-            // Szukaj istniejącego wątku lub utwórz nowy
             let thread = database.findActiveThread(result.title, channelId);
             let threadId;
 
@@ -140,43 +137,47 @@ module.exports = {
             found++;
           }
         } catch (error) {
-          logger.error(`Backfill analysis error for message ${message.id}`, error.message);
+          errors++;
+          logger.error(`Backfill error for message ${message.id}`, error.message);
+
+          // Jeśli błąd API (rate limit, brak kredytów) - poczekaj dłużej
+          if (error.status === 429 || error.status === 400) {
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
         }
 
         analyzed++;
 
-        // Aktualizuj postęp co 20 wiadomości
-        if (analyzed % 20 === 0) {
-          await interaction.editReply({
-            content: `🔍 Analizuję... (**${analyzed}/${allMessages.length}**) - znaleziono ${found} wzmianek`,
-          }).catch(() => {});
+        // Aktualizuj postęp co 50 wiadomości (edytuj wiadomość bota, nie interaction)
+        if (analyzed % 50 === 0) {
+          await progressMsg.edit(
+            `🔍 Skanowanie: **${analyzed}/${allMessages.length}** — znaleziono ${found} wzmianek${errors > 0 ? ` (${errors} błędów)` : ''}`
+          ).catch(() => {});
         }
 
-        // Rate limiting Claude API
         await new Promise((resolve) => setTimeout(resolve, API_DELAY));
       }
 
-      // Podsumowanie
+      // Podsumowanie - edytuj wiadomość postępu
       const embed = new EmbedBuilder()
         .setTitle('✅ Skanowanie zakończone')
         .setColor(0x2ecc71)
         .setDescription([
           `📊 **Przeanalizowano:** ${analyzed} wiadomości`,
           `🎯 **Znaleziono wzmianek:** ${found}`,
+          errors > 0 ? `⚠️ **Błędy:** ${errors}` : '',
           `📅 **Okres:** ostatnie ${days} dni`,
           '',
           'Użyj `/podsumowanie` aby zobaczyć wyniki!',
-        ].join('\n'))
+        ].filter(Boolean).join('\n'))
         .setTimestamp();
 
-      await interaction.editReply({ content: null, embeds: [embed] });
+      await progressMsg.edit({ content: null, embeds: [embed] });
 
-      logger.success(`Backfill completed: ${analyzed} messages analyzed, ${found} mentions found`);
+      logger.success(`Backfill completed: ${analyzed} analyzed, ${found} found, ${errors} errors`);
     } catch (error) {
       logger.error('Backfill failed', error.message);
-      await interaction.editReply({
-        content: '❌ Wystąpił błąd podczas skanowania. Sprawdź logi.',
-      }).catch(() => {});
+      await channel.send('❌ Skanowanie przerwane z powodu błędu. Sprawdź logi.').catch(() => {});
     }
   },
 };
