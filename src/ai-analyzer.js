@@ -9,18 +9,19 @@ const client = new Anthropic({
 });
 
 // Cache ostatnich wiadomości dla kontekstu rozmów
-// Klucz: channelId, wartość: tablica ostatnich wiadomości
 const messageCache = new Map();
 const CACHE_SIZE = 50;
 const CACHE_TTL = 30 * 60 * 1000; // 30 minut
+
+// Mapa messageId → { title, type } - do śledzenia łańcuchów odpowiedzi
+const titleMap = new Map();
+const TITLE_MAP_MAX = 5000;
 
 // Licznik do logowania postępu analizy
 let analysisStats = { total: 0, found: 0, errors: 0 };
 
 /**
  * Dodaje wiadomość do cache kontekstowego
- * @param {string} channelId - ID kanału
- * @param {Object} message - Obiekt wiadomości
  */
 function addToCache(channelId, message) {
   if (!messageCache.has(channelId)) {
@@ -47,9 +48,6 @@ function addToCache(channelId, message) {
 
 /**
  * Pobiera ostatnie wiadomości z cache jako kontekst
- * @param {string} channelId - ID kanału
- * @param {number} [count=5] - Liczba wiadomości do pobrania
- * @returns {string} Sformatowany kontekst
  */
 function getContext(channelId, count = 5) {
   const cache = messageCache.get(channelId) || [];
@@ -60,6 +58,46 @@ function getContext(channelId, count = 5) {
   return recent
     .map((m) => `${m.author}: ${truncate(m.content, 200)}`)
     .join('\n');
+}
+
+/**
+ * Zapisuje powiązanie messageId → tytuł
+ */
+function registerTitle(messageId, title, type) {
+  titleMap.set(messageId, { title, type });
+
+  // Ogranicz rozmiar mapy
+  if (titleMap.size > TITLE_MAP_MAX) {
+    const firstKey = titleMap.keys().next().value;
+    titleMap.delete(firstKey);
+  }
+}
+
+/**
+ * Szuka tytułu w łańcuchu odpowiedzi (reply chain)
+ * Idzie w górę: wiadomość → parent → grandparent → ...
+ * @param {Object} message - Wiadomość Discord
+ * @returns {{ title: string, type: string }|null}
+ */
+function findTitleInReplyChain(message) {
+  const replyToId = message.reference?.messageId;
+  if (!replyToId) return null;
+
+  // Sprawdź bezpośredniego rodzica
+  const parentTitle = titleMap.get(replyToId);
+  if (parentTitle) return parentTitle;
+
+  // Sprawdź w cache czy rodzic ma swojego rodzica (łańcuch)
+  const channelId = message.channel?.id || message.channelId;
+  const cache = messageCache.get(channelId) || [];
+  const parentMsg = cache.find((m) => m.id === replyToId);
+
+  if (parentMsg && parentMsg.replyTo) {
+    const grandparentTitle = titleMap.get(parentMsg.replyTo);
+    if (grandparentTitle) return grandparentTitle;
+  }
+
+  return null;
 }
 
 /**
@@ -76,7 +114,19 @@ async function analyzeMessage(message) {
 
   // Pomijaj bardzo krótkie wiadomości (emoji, "xD", "ok" itp.)
   if (message.content.length < 5) {
+    // Nawet krótkie wiadomości - jeśli są reply do znanego tytułu, zarejestruj
+    const chainTitle = findTitleInReplyChain(message);
+    if (chainTitle) {
+      registerTitle(message.id, chainTitle.title, chainTitle.type);
+    }
     return null;
+  }
+
+  // Sprawdź czy wiadomość jest częścią łańcucha odpowiedzi o znanym tytule
+  const chainTitle = findTitleInReplyChain(message);
+  let replyContext = '';
+  if (chainTitle) {
+    replyContext = `\n\nTA WIADOMOŚĆ JEST ODPOWIEDZIĄ W WĄTKU O: "${chainTitle.title}" (${chainTitle.type}). Jeśli wiadomość kontynuuje rozmowę o tym tytule (nawet bez wymieniania go), ustaw is_media_related: true i title: "${chainTitle.title}".`;
   }
 
   const prompt = `Analizujesz wiadomości z polskiego kanału Discord o nazwie "kulturka" - kanał poświęcony filmom, serialom i muzyce.
@@ -87,7 +137,7 @@ KONTEKST POPRZEDNICH WIADOMOŚCI:
 ${context}
 
 WIADOMOŚĆ DO ANALIZY:
-"${message.content}"
+"${message.content}"${replyContext}
 
 Odpowiedz TYLKO formatem JSON:
 {"is_media_related":true/false,"media_type":"film"/"serial"/"music"/null,"title":"tytuł lub null","has_spoilers":true/false,"safe_snippet":"fragment bez spoilerów max 100 znaków lub null","context_reference":null}
@@ -129,14 +179,27 @@ WAŻNE ZASADY:
 
     if (result.is_media_related && result.title) {
       analysisStats.found++;
+      registerTitle(message.id, result.title, result.media_type);
       logger.info(`AI detected: "${result.title}" (${result.media_type}) in: "${truncate(message.content, 60)}"`);
       return result;
     }
 
-    // Jeśli jest odwołanie do kontekstu ale bez tytułu
-    if (result.is_media_related && result.context_reference) {
-      logger.info(`AI context ref: "${result.context_reference}" in: "${truncate(message.content, 60)}"`);
-      return result;
+    // Jeśli AI nie wykrył tytułu, ale wiadomość jest reply do znanego tytułu
+    // i AI uznał że jest media_related - użyj tytułu z łańcucha
+    if (chainTitle && result.is_media_related) {
+      registerTitle(message.id, chainTitle.title, chainTitle.type);
+      logger.info(`Reply chain: "${chainTitle.title}" in: "${truncate(message.content, 60)}"`);
+      return {
+        ...result,
+        title: chainTitle.title,
+        media_type: chainTitle.type,
+      };
+    }
+
+    // Nawet jeśli AI nie uznał za media_related, ale jest reply chain - propaguj tytuł
+    // (żeby kolejne reply w łańcuchu też miały kontekst)
+    if (chainTitle) {
+      registerTitle(message.id, chainTitle.title, chainTitle.type);
     }
 
     // Loguj co 50 wiadomości żeby wiedzieć że działa
@@ -155,4 +218,5 @@ WAŻNE ZASADY:
 module.exports = {
   analyzeMessage,
   addToCache,
+  registerTitle,
 };
