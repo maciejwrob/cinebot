@@ -3,7 +3,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { formatMentionCount } = require('./helpers');
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 15;
 
 /**
  * Buduje embed z kompaktową listą tytułów (paginowana)
@@ -24,8 +24,11 @@ function buildTopEmbed(results, title, color, label, page = 0) {
   const lines = pageResults.map((row, i) => {
     const rank = start + i;
     const icon = rank < 3 ? medals[rank] : `**${rank + 1}.**`;
-    const users = row.unique_users === 1 ? '1 osoba' : `${row.unique_users} osób`;
-    return `${icon} **${row.title}** — ${formatMentionCount(row.mention_count)} (${users})`;
+    const userNames = row.users
+      ? row.users.split(',').slice(0, 4).join(', ')
+      : '';
+    const usersSuffix = row.unique_users > 4 ? ` +${row.unique_users - 4}` : '';
+    return `${icon} **${row.title}** — ${formatMentionCount(row.mention_count)}\n    👥 ${userNames}${usersSuffix}`;
   });
 
   const embed = new EmbedBuilder()

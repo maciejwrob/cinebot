@@ -19,13 +19,14 @@ module.exports = {
   // Obsługa autocomplete - podpowiadanie tytułów z bazy
   async autocomplete(interaction) {
     const query = interaction.options.getFocused();
-    if (query.length < 2) {
-      return interaction.respond([]);
-    }
 
-    const results = database.searchTitles(query);
+    // Pokaż najpopularniejsze tytuły jeśli nic nie wpisano
+    const results = query.length === 0
+      ? database.searchTitles('%')
+      : database.searchTitles(query);
+
     const choices = results.map((r) => ({
-      name: `${r.title} (${r.type}) - ${formatMentionCount(r.mention_count)}`,
+      name: truncate(`${r.title} (${r.type}) - ${formatMentionCount(r.mention_count)}`, 100),
       value: r.title,
     }));
 

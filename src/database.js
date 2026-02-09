@@ -150,11 +150,10 @@ function getTopMedia(type, periodClause, limit = 999) {
  * @returns {Object|null} Szczegóły lub null
  */
 function getMediaInfo(title) {
-  // Wyszukiwanie z LIKE - bardziej wybaczające (obsługuje różnice w wielkości liter, spacje itp.)
-  const searchTerm = `%${title.trim()}%`;
+  const searchTerm = title.trim();
 
-  // Podstawowe statystyki
-  const statsStmt = db.prepare(`
+  // Najpierw spróbuj dokładne dopasowanie (case insensitive)
+  let stats = db.prepare(`
     SELECT
       title,
       type,
@@ -163,42 +162,55 @@ function getMediaInfo(title) {
       MIN(mentioned_at) as first_mention,
       MAX(mentioned_at) as last_mention
     FROM media_mentions
-    WHERE LOWER(title) LIKE LOWER(?)
-    GROUP BY LOWER(title)
-  `);
+    WHERE LOWER(title) = LOWER(?)
+  `).get(searchTerm);
 
-  const stats = statsStmt.get(searchTerm);
-  if (!stats) return null;
+  // Jeśli nie znaleziono - spróbuj LIKE (częściowe dopasowanie)
+  if (!stats || !stats.title) {
+    stats = db.prepare(`
+      SELECT
+        title,
+        type,
+        COUNT(*) as total_mentions,
+        COUNT(DISTINCT user_id) as unique_users,
+        MIN(mentioned_at) as first_mention,
+        MAX(mentioned_at) as last_mention
+      FROM media_mentions
+      WHERE LOWER(title) LIKE LOWER(?)
+    `).get(`%${searchTerm}%`);
+  }
 
-  // Użytkownicy z liczbą wzmianek
-  const usersStmt = db.prepare(`
+  if (!stats || !stats.title) {
+    logger.info(`getMediaInfo: nothing found for "${searchTerm}"`);
+    return null;
+  }
+
+  // Użyj znalezionego tytułu do dalszych zapytań (dokładna forma z bazy)
+  const exactTitle = stats.title;
+
+  const users = db.prepare(`
     SELECT user_name, COUNT(*) as count
     FROM media_mentions
-    WHERE LOWER(title) LIKE LOWER(?)
+    WHERE title = ?
     GROUP BY user_id, user_name
     ORDER BY count DESC
     LIMIT 10
-  `);
-  const users = usersStmt.all(searchTerm);
+  `).all(exactTitle);
 
-  // Snippety (opinie bez spoilerów)
-  const snippetsStmt = db.prepare(`
+  const snippets = db.prepare(`
     SELECT DISTINCT context_snippet
     FROM media_mentions
-    WHERE LOWER(title) LIKE LOWER(?) AND context_snippet IS NOT NULL AND context_snippet != ''
+    WHERE title = ? AND context_snippet IS NOT NULL AND context_snippet != ''
     LIMIT 5
-  `);
-  const snippets = snippetsStmt.all(searchTerm);
+  `).all(exactTitle);
 
-  // Linki do rozmów z datami (ostatnie 10)
-  const linksStmt = db.prepare(`
+  const links = db.prepare(`
     SELECT message_link, mentioned_at, user_name
     FROM media_mentions
-    WHERE LOWER(title) LIKE LOWER(?) AND message_link != ''
+    WHERE title = ? AND message_link != ''
     ORDER BY mentioned_at DESC
     LIMIT 10
-  `);
-  const links = linksStmt.all(searchTerm);
+  `).all(exactTitle);
 
   return {
     ...stats,
@@ -215,10 +227,10 @@ function getMediaInfo(title) {
  */
 function searchTitles(query) {
   const stmt = db.prepare(`
-    SELECT DISTINCT title, type, COUNT(*) as mention_count
+    SELECT title, type, COUNT(*) as mention_count
     FROM media_mentions
     WHERE LOWER(title) LIKE LOWER(?)
-    GROUP BY title
+    GROUP BY LOWER(title)
     ORDER BY mention_count DESC
     LIMIT 25
   `);
