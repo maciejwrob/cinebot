@@ -61,6 +61,13 @@ function initialize() {
  * @param {Object} mention - Dane wzmianki
  */
 function addMention(mention) {
+  // Sprawdź czy wzmianka z tego message_id już istnieje (deduplikacja)
+  const exists = db.prepare(
+    'SELECT 1 FROM media_mentions WHERE message_id = ? AND title = ?'
+  ).get(mention.messageId, mention.title);
+
+  if (exists) return;
+
   const stmt = db.prepare(`
     INSERT INTO media_mentions (title, type, user_id, user_name, message_id, message_link, context_snippet, conversation_thread_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -142,6 +149,9 @@ function getTopMedia(type, periodClause, limit = 999) {
  * @returns {Object|null} Szczegóły lub null
  */
 function getMediaInfo(title) {
+  // Wyszukiwanie z LIKE - bardziej wybaczające (obsługuje różnice w wielkości liter, spacje itp.)
+  const searchTerm = `%${title.trim()}%`;
+
   // Podstawowe statystyki
   const statsStmt = db.prepare(`
     SELECT
@@ -152,42 +162,42 @@ function getMediaInfo(title) {
       MIN(mentioned_at) as first_mention,
       MAX(mentioned_at) as last_mention
     FROM media_mentions
-    WHERE LOWER(title) = LOWER(?)
-    GROUP BY title
+    WHERE LOWER(title) LIKE LOWER(?)
+    GROUP BY LOWER(title)
   `);
 
-  const stats = statsStmt.get(title);
+  const stats = statsStmt.get(searchTerm);
   if (!stats) return null;
 
   // Użytkownicy z liczbą wzmianek
   const usersStmt = db.prepare(`
     SELECT user_name, COUNT(*) as count
     FROM media_mentions
-    WHERE LOWER(title) = LOWER(?)
+    WHERE LOWER(title) LIKE LOWER(?)
     GROUP BY user_id, user_name
     ORDER BY count DESC
     LIMIT 10
   `);
-  const users = usersStmt.all(title);
+  const users = usersStmt.all(searchTerm);
 
   // Snippety (opinie bez spoilerów)
   const snippetsStmt = db.prepare(`
     SELECT DISTINCT context_snippet
     FROM media_mentions
-    WHERE LOWER(title) = LOWER(?) AND context_snippet IS NOT NULL AND context_snippet != ''
+    WHERE LOWER(title) LIKE LOWER(?) AND context_snippet IS NOT NULL AND context_snippet != ''
     LIMIT 5
   `);
-  const snippets = snippetsStmt.all(title);
+  const snippets = snippetsStmt.all(searchTerm);
 
   // Linki do rozmów z datami (ostatnie 10)
   const linksStmt = db.prepare(`
     SELECT message_link, mentioned_at, user_name
     FROM media_mentions
-    WHERE LOWER(title) = LOWER(?) AND message_link != ''
+    WHERE LOWER(title) LIKE LOWER(?) AND message_link != ''
     ORDER BY mentioned_at DESC
     LIMIT 10
   `);
-  const links = linksStmt.all(title);
+  const links = linksStmt.all(searchTerm);
 
   return {
     ...stats,
@@ -230,6 +240,15 @@ function getSummary() {
 }
 
 /**
+ * Czyści całą bazę danych (do ponownego skanowania)
+ */
+function clearAll() {
+  db.exec('DELETE FROM media_mentions');
+  db.exec('DELETE FROM conversation_threads');
+  logger.info('Database cleared');
+}
+
+/**
  * Zamyka połączenie z bazą danych
  */
 function close() {
@@ -248,5 +267,6 @@ module.exports = {
   getMediaInfo,
   searchTitles,
   getSummary,
+  clearAll,
   close,
 };
