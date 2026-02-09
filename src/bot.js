@@ -177,6 +177,7 @@ async function processMessage(message) {
     messageLink,
     contextSnippet: result.has_spoilers ? null : result.safe_snippet,
     threadId,
+    mentionedAt: message.createdAt.toISOString(),
   });
 }
 

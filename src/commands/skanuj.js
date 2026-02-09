@@ -132,6 +132,7 @@ module.exports = {
               messageLink,
               contextSnippet: result.has_spoilers ? null : result.safe_snippet,
               threadId,
+              mentionedAt: message.createdAt.toISOString(),
             });
 
             found++;

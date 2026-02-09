@@ -69,8 +69,8 @@ function addMention(mention) {
   if (exists) return;
 
   const stmt = db.prepare(`
-    INSERT INTO media_mentions (title, type, user_id, user_name, message_id, message_link, context_snippet, conversation_thread_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO media_mentions (title, type, user_id, user_name, message_id, message_link, context_snippet, conversation_thread_id, mentioned_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -81,7 +81,8 @@ function addMention(mention) {
     mention.messageId,
     mention.messageLink,
     mention.contextSnippet,
-    mention.threadId || null
+    mention.threadId || null,
+    mention.mentionedAt || new Date().toISOString()
   );
 
   logger.info(`Mention saved: "${mention.title}" (${mention.type}) by ${mention.userName}`);
