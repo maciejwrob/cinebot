@@ -135,6 +135,7 @@ function getAllAliases() {
  * wybiera najpopularniejszy wariant i scala pozostałe
  */
 function migrateNormalizeTitles() {
+  // === KROK 1: Napraw wielkość liter ===
   // Znajdź grupy tytułów które różnią się tylko wielkością liter
   const groups = db.prepare(`
     SELECT LOWER(title) as lower_title, COUNT(DISTINCT title) as variant_count
@@ -143,27 +144,65 @@ function migrateNormalizeTitles() {
     HAVING COUNT(DISTINCT title) > 1
   `).all();
 
-  if (groups.length === 0) return;
+  if (groups.length > 0) {
+    logger.info(`Migration: found ${groups.length} title groups with case variants`);
 
-  logger.info(`Migration: found ${groups.length} title groups with case variants`);
+    for (const group of groups) {
+      // Znajdź najpopularniejszy wariant (ten z największą liczbą wzmianek)
+      const canonical = db.prepare(`
+        SELECT title, COUNT(*) as cnt
+        FROM media_mentions
+        WHERE LOWER(title) = ?
+        GROUP BY title
+        ORDER BY cnt DESC
+        LIMIT 1
+      `).get(group.lower_title);
 
-  for (const group of groups) {
-    // Znajdź najpopularniejszy wariant (ten z największą liczbą wzmianek)
-    const canonical = db.prepare(`
-      SELECT title, COUNT(*) as cnt
-      FROM media_mentions
-      WHERE LOWER(title) = ?
-      GROUP BY title
-      ORDER BY cnt DESC
-      LIMIT 1
-    `).get(group.lower_title);
+      // Scal wszystkie warianty do kanonicznego
+      const result = db.prepare(
+        'UPDATE media_mentions SET title = ? WHERE LOWER(title) = ? AND title != ?'
+      ).run(canonical.title, group.lower_title, canonical.title);
 
-    // Scal wszystkie warianty do kanonicznego
-    const result = db.prepare(
-      'UPDATE media_mentions SET title = ? WHERE LOWER(title) = ? AND title != ?'
-    ).run(canonical.title, group.lower_title, canonical.title);
+      logger.info(`Migration: "${group.lower_title}" → "${canonical.title}" (merged ${result.changes} records)`);
+    }
+  }
 
-    logger.info(`Migration: "${group.lower_title}" → "${canonical.title}" (merged ${result.changes} records)`);
+  // === KROK 2: Scal znane polskie/angielskie warianty i skróty ===
+  const knownMerges = [
+    // [wariant do scalenia, kanoniczny tytuł]
+    ['Game of Thrones', 'Gra o tron'],
+    ['Rycerz', 'Rycerz siedmiu królestw'],
+    ['Knight of the Seven Kingdoms', 'Rycerz siedmiu królestw'],
+    ['A Knight of the Seven Kingdoms', 'Rycerz siedmiu królestw'],
+    ['House of the Dragon', 'Ród smoka'],
+    ['The Witcher', 'Wiedźmin'],
+    ['Stranger Things', 'Stranger Things'],
+    ['The Last of Us', 'The Last of Us'],
+    ['Breaking Bad', 'Breaking Bad'],
+    ['The White Lotus', 'Biały Lotos'],
+    ['White Lotus', 'Biały Lotos'],
+  ];
+
+  for (const [fromTitle, toTitle] of knownMerges) {
+    // Sprawdź czy w bazie istnieją wzmianki z tym wariantem
+    const count = db.prepare(
+      'SELECT COUNT(*) as cnt FROM media_mentions WHERE LOWER(title) = LOWER(?) AND LOWER(title) != LOWER(?)'
+    ).get(fromTitle, toTitle);
+
+    if (count && count.cnt > 0) {
+      db.prepare(
+        'UPDATE media_mentions SET title = ? WHERE LOWER(title) = LOWER(?)'
+      ).run(toTitle, fromTitle);
+
+      logger.info(`Migration: merged "${fromTitle}" → "${toTitle}" (${count.cnt} records)`);
+    }
+
+    // Zawsze dodaj alias (nawet jeśli nie było wzmianek - na przyszłość)
+    if (fromTitle.toLowerCase() !== toTitle.toLowerCase()) {
+      db.prepare(
+        'INSERT OR IGNORE INTO title_aliases (alias, canonical_title) VALUES (?, ?)'
+      ).run(fromTitle, toTitle);
+    }
   }
 }
 
