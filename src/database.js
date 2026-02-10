@@ -45,6 +45,15 @@ function initialize() {
     )
   `);
 
+  // Tabela aliasów tytułów (mapowanie wariantów na kanoniczny tytuł)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS title_aliases (
+      alias TEXT NOT NULL,
+      canonical_title TEXT NOT NULL,
+      PRIMARY KEY (alias)
+    )
+  `);
+
   // Indeksy dla szybszych zapytań
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_title ON media_mentions(title);
@@ -53,7 +62,109 @@ function initialize() {
     CREATE INDEX IF NOT EXISTS idx_thread ON media_mentions(conversation_thread_id);
   `);
 
+  // Jednorazowa migracja - napraw istniejące duplikaty
+  migrateNormalizeTitles();
+
   logger.success('Database initialized successfully');
+}
+
+/**
+ * Rozwiązuje tytuł do formy kanonicznej:
+ * 1. Sprawdza tabelę aliasów (np. "Game of Thrones" → "Gra o tron")
+ * 2. Sprawdza czy istnieje wariant w bazie z takim samym LOWER() - używa istniejącej formy
+ * @param {string} title - Tytuł do normalizacji
+ * @returns {string} Kanoniczny tytuł
+ */
+function resolveTitle(title) {
+  // 1. Sprawdź aliasy
+  const alias = db.prepare(
+    'SELECT canonical_title FROM title_aliases WHERE LOWER(alias) = LOWER(?)'
+  ).get(title);
+  if (alias) return alias.canonical_title;
+
+  // 2. Sprawdź czy w bazie jest już taki tytuł (case-insensitive) - użyj istniejącej formy
+  const existing = db.prepare(
+    'SELECT title FROM media_mentions WHERE LOWER(title) = LOWER(?) LIMIT 1'
+  ).get(title);
+  if (existing) return existing.title;
+
+  return title;
+}
+
+/**
+ * Dodaje alias tytułu (np. angielska nazwa → polska)
+ * @param {string} alias - Wariant tytułu
+ * @param {string} canonicalTitle - Kanoniczny tytuł
+ */
+function addAlias(alias, canonicalTitle) {
+  db.prepare(`
+    INSERT OR REPLACE INTO title_aliases (alias, canonical_title) VALUES (?, ?)
+  `).run(alias, canonicalTitle);
+  logger.info(`Alias added: "${alias}" → "${canonicalTitle}"`);
+}
+
+/**
+ * Scala istniejące wzmianki z jednego tytułu do drugiego
+ * @param {string} fromTitle - Tytuł źródłowy (do usunięcia)
+ * @param {string} toTitle - Tytuł docelowy (kanoniczny)
+ * @returns {number} Liczba zaktualizowanych rekordów
+ */
+function mergeTitles(fromTitle, toTitle) {
+  const result = db.prepare(
+    'UPDATE media_mentions SET title = ? WHERE LOWER(title) = LOWER(?)'
+  ).run(toTitle, fromTitle);
+
+  // Dodaj alias żeby przyszłe wzmianki też się łączyły
+  addAlias(fromTitle, toTitle);
+
+  logger.info(`Merged "${fromTitle}" → "${toTitle}" (${result.changes} records)`);
+  return result.changes;
+}
+
+/**
+ * Pobiera listę wszystkich aliasów
+ * @returns {Array} Lista aliasów
+ */
+function getAllAliases() {
+  return db.prepare('SELECT alias, canonical_title FROM title_aliases ORDER BY canonical_title').all();
+}
+
+/**
+ * Jednorazowa migracja - naprawia duplikaty wielkości liter w istniejących danych
+ * Dla każdej grupy tytułów różniących się tylko wielkością liter,
+ * wybiera najpopularniejszy wariant i scala pozostałe
+ */
+function migrateNormalizeTitles() {
+  // Znajdź grupy tytułów które różnią się tylko wielkością liter
+  const groups = db.prepare(`
+    SELECT LOWER(title) as lower_title, COUNT(DISTINCT title) as variant_count
+    FROM media_mentions
+    GROUP BY LOWER(title)
+    HAVING COUNT(DISTINCT title) > 1
+  `).all();
+
+  if (groups.length === 0) return;
+
+  logger.info(`Migration: found ${groups.length} title groups with case variants`);
+
+  for (const group of groups) {
+    // Znajdź najpopularniejszy wariant (ten z największą liczbą wzmianek)
+    const canonical = db.prepare(`
+      SELECT title, COUNT(*) as cnt
+      FROM media_mentions
+      WHERE LOWER(title) = ?
+      GROUP BY title
+      ORDER BY cnt DESC
+      LIMIT 1
+    `).get(group.lower_title);
+
+    // Scal wszystkie warianty do kanonicznego
+    const result = db.prepare(
+      'UPDATE media_mentions SET title = ? WHERE LOWER(title) = ? AND title != ?'
+    ).run(canonical.title, group.lower_title, canonical.title);
+
+    logger.info(`Migration: "${group.lower_title}" → "${canonical.title}" (merged ${result.changes} records)`);
+  }
 }
 
 /**
@@ -61,10 +172,13 @@ function initialize() {
  * @param {Object} mention - Dane wzmianki
  */
 function addMention(mention) {
+  // Rozwiąż tytuł do formy kanonicznej (aliasy + case normalization)
+  const resolvedTitle = resolveTitle(mention.title);
+
   // Sprawdź czy wzmianka z tego message_id już istnieje (deduplikacja)
   const exists = db.prepare(
-    'SELECT 1 FROM media_mentions WHERE message_id = ? AND title = ?'
-  ).get(mention.messageId, mention.title);
+    'SELECT 1 FROM media_mentions WHERE message_id = ? AND LOWER(title) = LOWER(?)'
+  ).get(mention.messageId, resolvedTitle);
 
   if (exists) return;
 
@@ -74,7 +188,7 @@ function addMention(mention) {
   `);
 
   stmt.run(
-    mention.title,
+    resolvedTitle,
     mention.type,
     mention.userId,
     mention.userName,
@@ -85,7 +199,7 @@ function addMention(mention) {
     mention.mentionedAt || new Date().toISOString()
   );
 
-  logger.info(`Mention saved: "${mention.title}" (${mention.type}) by ${mention.userName}`);
+  logger.info(`Mention saved: "${resolvedTitle}" (${mention.type}) by ${mention.userName}`);
 }
 
 /**
@@ -185,13 +299,13 @@ function getMediaInfo(title) {
     return null;
   }
 
-  // Użyj znalezionego tytułu do dalszych zapytań (dokładna forma z bazy)
+  // Użyj znalezionego tytułu do dalszych zapytań (case-insensitive żeby złapać wszystkie warianty)
   const exactTitle = stats.title;
 
   const users = db.prepare(`
     SELECT user_name, COUNT(*) as count
     FROM media_mentions
-    WHERE title = ?
+    WHERE LOWER(title) = LOWER(?)
     GROUP BY user_id, user_name
     ORDER BY count DESC
     LIMIT 10
@@ -200,14 +314,14 @@ function getMediaInfo(title) {
   const snippets = db.prepare(`
     SELECT DISTINCT context_snippet
     FROM media_mentions
-    WHERE title = ? AND context_snippet IS NOT NULL AND context_snippet != ''
+    WHERE LOWER(title) = LOWER(?) AND context_snippet IS NOT NULL AND context_snippet != ''
     LIMIT 5
   `).all(exactTitle);
 
   const links = db.prepare(`
     SELECT message_link, mentioned_at, user_name
     FROM media_mentions
-    WHERE title = ? AND message_link != ''
+    WHERE LOWER(title) = LOWER(?) AND message_link != ''
     ORDER BY mentioned_at DESC
     LIMIT 10
   `).all(exactTitle);
@@ -282,4 +396,8 @@ module.exports = {
   getSummary,
   clearAll,
   close,
+  addAlias,
+  mergeTitles,
+  getAllAliases,
+  resolveTitle,
 };
