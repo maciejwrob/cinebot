@@ -131,7 +131,7 @@ async function analyzeMessage(message) {
 
   const prompt = `Analizujesz wiadomości z polskiego kanału Discord o nazwie "kulturka" - kanał poświęcony filmom, serialom i muzyce.
 
-ZADANIE: Sprawdź czy wiadomość wspomina o jakimkolwiek filmie, serialu, anime, muzyce (artysta, album, piosenka) lub grze.
+ZADANIE: Określ GŁÓWNY tytuł filmu/serialu/muzyki, o którym mówi ta wiadomość.
 
 KONTEKST POPRZEDNICH WIADOMOŚCI:
 ${context}
@@ -143,6 +143,12 @@ Odpowiedz TYLKO formatem JSON:
 {"is_media_related":true/false,"media_type":"film"/"serial"/"music"/null,"title":"tytuł lub null","has_spoilers":true/false,"safe_snippet":"fragment bez spoilerów max 100 znaków lub null","context_reference":null}
 
 WAŻNE ZASADY:
+- KLUCZOWE: Zwróć tytuł, który jest GŁÓWNYM TEMATEM wiadomości, a nie tytuł użyty jako porównanie
+  - "To było w stylu Gry o tron" → główny temat to serial, o którym mowa (z kontekstu), NIE "Gra o tron"
+  - "Przypomina mi Breaking Bad" → główny temat to to, co jest porównywane, NIE "Breaking Bad"
+  - "Rodem z Gry o tron" → to porównanie, szukaj głównego tematu w kontekście
+  - "Lepsze niż X", "jak w X", "w stylu X", "porównywalne z X" → X to tylko odniesienie, nie główny temat
+  - ALE: "Oglądam Grę o tron", "Gra o tron jest super" → tu Gra o tron JEST głównym tematem
 - Kanał jest o kulturze - bądź OTWARTY na wykrywanie tytułów. Nawet krótkie odniesienia się liczą
 - Polskie i angielskie tytuły - oba akceptuj
 - Jeśli ktoś pisze zdanie o serialu/filmie ale nie wymienia tytułu, sprawdź kontekst poprzednich wiadomości
