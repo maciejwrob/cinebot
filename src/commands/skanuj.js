@@ -36,9 +36,10 @@ module.exports = {
       });
     }
 
-    // Odpowiedz od razu
+    // Odpowiedz od razu (widoczne tylko dla osoby która uruchomiła)
     await interaction.reply({
-      content: `🔍 Rozpoczynam skanowanie kanału z ostatnich **${days} dni**...`,
+      content: `🔍 Rozpoczynam skanowanie kanału z ostatnich **${days} dni**... Postęp będę wysyłać tutaj.`,
+      ephemeral: true,
     });
 
     try {
@@ -83,10 +84,11 @@ module.exports = {
       // Sortuj chronologicznie
       allMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
-      // Wyslij osobna wiadomosc z postepem (interaction.editReply wygasa po 15min)
-      const progressMsg = await channel.send(
-        `🔍 Skanowanie: znaleziono **${allMessages.length}** wiadomości. Analizuję...`
-      );
+      // Wyślij prywatną wiadomość z postępem (ephemeral - widoczna tylko dla admina)
+      const progressMsg = await interaction.followUp({
+        content: `🔍 Skanowanie: znaleziono **${allMessages.length}** wiadomości. Analizuję...`,
+        ephemeral: true,
+      });
 
       let analyzed = 0;
       let found = 0;
@@ -178,7 +180,7 @@ module.exports = {
       logger.success(`Backfill completed: ${analyzed} analyzed, ${found} found, ${errors} errors`);
     } catch (error) {
       logger.error('Backfill failed', error.message);
-      await channel.send('❌ Skanowanie przerwane z powodu błędu. Sprawdź logi.').catch(() => {});
+      await interaction.followUp({ content: '❌ Skanowanie przerwane z powodu błędu. Sprawdź logi.', ephemeral: true }).catch(() => {});
     }
   },
 };
