@@ -74,6 +74,18 @@ function createMessageLink(guildId, channelId, messageId) {
   return `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
 }
 
+/**
+ * Formatuje datę ISO na czytelny format "7 lut 2026"
+ * @param {string} isoString - Data w formacie ISO
+ * @returns {string}
+ */
+function formatDate(isoString) {
+  if (!isoString) return '?';
+  const months = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
+  const d = new Date(isoString);
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 module.exports = {
   createSlug,
   generateThreadId,
@@ -81,4 +93,5 @@ module.exports = {
   truncate,
   formatMentionCount,
   createMessageLink,
+  formatDate,
 };

@@ -1,6 +1,6 @@
 // Wspólna logika wyświetlania rankingów - kompaktowa lista wszystkich tytułów
 
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { formatMentionCount } = require('./helpers');
 
 const ITEMS_PER_PAGE = 15;
@@ -12,7 +12,7 @@ const ITEMS_PER_PAGE = 15;
  * @param {number} color - Kolor embeda
  * @param {string} label - Etykieta okresu
  * @param {number} page - Numer strony (od 0)
- * @returns {{ embed: EmbedBuilder, row: ActionRowBuilder|null, totalPages: number }}
+ * @returns {{ embed: EmbedBuilder, rows: ActionRowBuilder[], totalPages: number }}
  */
 function buildTopEmbed(results, title, color, label, page = 0) {
   const totalPages = Math.ceil(results.length / ITEMS_PER_PAGE);
@@ -36,28 +36,46 @@ function buildTopEmbed(results, title, color, label, page = 0) {
     .setColor(color)
     .setDescription(lines.join('\n'))
     .setFooter({
-      text: `Łącznie ${results.length} tytułów | Strona ${page + 1}/${totalPages} | Użyj /info [tytuł] aby zobaczyć szczegóły`,
+      text: `Łącznie ${results.length} tytułów | Strona ${page + 1}/${totalPages}`,
     })
     .setTimestamp();
 
+  const rows = [];
+
+  // Dropdown z tytułami do szybkiego podglądu info
+  if (pageResults.length > 0) {
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`info_select_${page}`)
+      .setPlaceholder('Wybierz tytuł aby zobaczyć szczegóły...')
+      .addOptions(
+        pageResults.map((row, i) => ({
+          label: row.title.substring(0, 100),
+          description: `${formatMentionCount(row.mention_count)}, ${row.unique_users} użytkowników`,
+          value: row.title.substring(0, 100),
+        }))
+      );
+    rows.push(new ActionRowBuilder().addComponents(selectMenu));
+  }
+
   // Przyciski nawigacji (tylko gdy > 1 strona)
-  let row = null;
   if (totalPages > 1) {
-    row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`top_prev_${page}`)
-        .setLabel('◀ Poprzednia')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page === 0),
-      new ButtonBuilder()
-        .setCustomId(`top_next_${page}`)
-        .setLabel('Następna ▶')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page >= totalPages - 1)
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`top_prev_${page}`)
+          .setLabel('◀ Poprzednia')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(page === 0),
+        new ButtonBuilder()
+          .setCustomId(`top_next_${page}`)
+          .setLabel('Następna ▶')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(page >= totalPages - 1)
+      )
     );
   }
 
-  return { embed, row, totalPages };
+  return { embed, rows, totalPages };
 }
 
 module.exports = { buildTopEmbed, ITEMS_PER_PAGE };

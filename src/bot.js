@@ -7,13 +7,14 @@ const {
   REST,
   Routes,
   Events,
+  EmbedBuilder,
 } = require('discord.js');
 const path = require('path');
 const fs = require('fs');
 const logger = require('./utils/logger');
 const database = require('./database');
 const aiAnalyzer = require('./ai-analyzer');
-const { generateThreadId, createMessageLink } = require('./utils/helpers');
+const { generateThreadId, createMessageLink, formatMentionCount, truncate, formatDate } = require('./utils/helpers');
 
 // Rate limiting - kolejka wiadomości do analizy
 const messageQueue = [];
@@ -219,6 +220,49 @@ function setupEventHandlers(client) {
 
   // Obsługa slash commands
   client.on(Events.InteractionCreate, async (interaction) => {
+    // Obsługa select menu (dropdown z tytułami w rankingach)
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('info_select')) {
+      const selectedTitle = interaction.values[0];
+      const info = database.getMediaInfo(selectedTitle);
+
+      if (!info) {
+        return interaction.reply({ content: `Nie znaleziono wzmianek o "${selectedTitle}".`, ephemeral: true });
+      }
+
+      const typeIcons = { film: '🎬', serial: '📺', music: '🎵' };
+      const typeIcon = typeIcons[info.type] || '📌';
+
+      const embed = new EmbedBuilder()
+        .setTitle(`${typeIcon} ${info.title}`)
+        .setColor(0x9b59b6)
+        .setTimestamp();
+
+      const statsText = [
+        `Wzmianek: **${info.total_mentions}** | Użytkowników: **${info.unique_users}**`,
+        `Pierwsza: **${formatDate(info.first_mention)}** | Ostatnia: **${formatDate(info.last_mention)}**`,
+      ].join('\n');
+      embed.addFields({ name: '📊 Statystyki', value: statsText });
+
+      if (info.users.length > 0) {
+        const usersText = info.users.map((u) => `**${u.user_name}** (${u.count})`).join(', ');
+        embed.addFields({ name: '👥 Polecali', value: truncate(usersText, 1024) });
+      }
+
+      if (info.snippets.length > 0) {
+        const opinionsText = info.snippets.filter(Boolean).slice(0, 3).map((s) => `"${truncate(s, 80)}"`).join('\n');
+        if (opinionsText) embed.addFields({ name: '💬 Opinie', value: opinionsText });
+      }
+
+      if (info.links.length > 0) {
+        const maxLinks = 5;
+        const linksText = info.links.slice(0, maxLinks).map((l) => `[${formatDate(l.mentioned_at)} — ${l.user_name}](${l.message_link})`).join('\n');
+        const suffix = info.total_mentions > maxLinks ? `\n*...i ${info.total_mentions - maxLinks} więcej*` : '';
+        embed.addFields({ name: '🔗 Rozmowy', value: truncate(linksText + suffix, 1024) });
+      }
+
+      return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
     // Obsługa autocomplete (np. /info)
     if (interaction.isAutocomplete()) {
       const command = client.commands.get(interaction.commandName);

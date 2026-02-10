@@ -34,28 +34,25 @@ module.exports = {
       });
     }
 
-    const { embed, row } = buildTopEmbed(results, '🎵 Muzyka', 0x2ecc71, label, 0);
+    const { embed, rows } = buildTopEmbed(results, '🎵 Muzyka', 0x2ecc71, label, 0);
     const options = { embeds: [embed] };
-    if (row) options.components = [row];
+    if (rows.length) options.components = rows;
 
     const reply = await interaction.reply({ ...options, fetchReply: true });
 
-    if (results.length > ITEMS_PER_PAGE) {
-      const collector = reply.createMessageComponentCollector({ time: 300000 });
-      let currentPage = 0;
+    const collector = reply.createMessageComponentCollector({ time: 300000 });
+    let currentPage = 0;
 
-      collector.on('collect', async (btn) => {
-        if (btn.user.id !== interaction.user.id) {
-          return btn.reply({ content: 'To nie Twoja komenda.', ephemeral: true });
-        }
-        if (btn.customId.startsWith('top_next')) currentPage++;
-        if (btn.customId.startsWith('top_prev')) currentPage--;
+    collector.on('collect', async (btn) => {
+      if (btn.customId.startsWith('info_select')) return;
+      if (btn.user.id !== interaction.user.id) {
+        return btn.reply({ content: 'To nie Twoja komenda.', ephemeral: true });
+      }
+      if (btn.customId.startsWith('top_next')) currentPage++;
+      if (btn.customId.startsWith('top_prev')) currentPage--;
 
-        const { embed: newEmbed, row: newRow } = buildTopEmbed(results, '🎵 Muzyka', 0x2ecc71, label, currentPage);
-        const opts = { embeds: [newEmbed] };
-        opts.components = newRow ? [newRow] : [];
-        await btn.update(opts);
-      });
-    }
+      const { embed: newEmbed, rows: newRows } = buildTopEmbed(results, '🎵 Muzyka', 0x2ecc71, label, currentPage);
+      await btn.update({ embeds: [newEmbed], components: newRows });
+    });
   },
 };

@@ -2,7 +2,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const database = require('../database');
-const { formatMentionCount, truncate } = require('../utils/helpers');
+const { formatMentionCount, truncate, formatDate } = require('../utils/helpers');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -39,7 +39,7 @@ module.exports = {
 
     if (!info) {
       return interaction.reply({
-        content: `❌ Nie znaleziono wzmianek o "${title}".`,
+        content: `Nie znaleziono wzmianek o "${title}".`,
         ephemeral: true,
       });
     }
@@ -49,50 +49,51 @@ module.exports = {
     const typeIcon = typeIcons[info.type] || '📌';
 
     const embed = new EmbedBuilder()
-      .setTitle(`${typeIcon} Informacje: "${info.title}"`)
+      .setTitle(`${typeIcon} ${info.title}`)
       .setColor(0x9b59b6)
       .setTimestamp();
 
-    // Statystyki
+    // Statystyki - kompaktowe z ładnymi datami
     const statsText = [
-      `• Łącznie wzmianek: **${info.total_mentions}**`,
-      `• Unikalni użytkownicy: **${info.unique_users}**`,
-      `• Pierwsza wzmianka: ${info.first_mention}`,
-      `• Ostatnia wzmianka: ${info.last_mention}`,
+      `Wzmianek: **${info.total_mentions}** | Użytkowników: **${info.unique_users}**`,
+      `Pierwsza: **${formatDate(info.first_mention)}** | Ostatnia: **${formatDate(info.last_mention)}**`,
     ].join('\n');
 
     embed.addFields({ name: '📊 Statystyki', value: statsText });
 
-    // Użytkownicy
+    // Użytkownicy - kompaktowo
     if (info.users.length > 0) {
       const usersText = info.users
-        .map((u) => `${u.user_name} (${formatMentionCount(u.count)})`)
+        .map((u) => `**${u.user_name}** (${u.count})`)
         .join(', ');
       embed.addFields({ name: '👥 Polecali', value: truncate(usersText, 1024) });
     }
 
-    // Opinie (snippety)
+    // Opinie (snippety) - max 3 żeby zmieścić się w limicie
     if (info.snippets.length > 0) {
       const opinionsText = info.snippets
         .filter(Boolean)
-        .map((s) => `"${truncate(s, 100)}"`)
+        .slice(0, 3)
+        .map((s) => `"${truncate(s, 80)}"`)
         .join('\n');
       if (opinionsText) {
-        embed.addFields({ name: '💬 Przykładowe opinie', value: opinionsText });
+        embed.addFields({ name: '💬 Opinie', value: opinionsText });
       }
     }
 
-    // Linki do rozmów z datami
+    // Linki do rozmów - max 5 żeby nie przekroczyć limitu embeda
     if (info.links.length > 0) {
+      const maxLinks = 5;
       const linksText = info.links
-        .map((l) => {
-          const date = l.mentioned_at.substring(0, 10); // YYYY-MM-DD
-          return `• [${date} — ${l.user_name}](${l.message_link})`;
-        })
+        .slice(0, maxLinks)
+        .map((l) => `[${formatDate(l.mentioned_at)} — ${l.user_name}](${l.message_link})`)
         .join('\n');
+      const suffix = info.total_mentions > maxLinks
+        ? `\n*...i ${info.total_mentions - maxLinks} więcej*`
+        : '';
       embed.addFields({
-        name: `🔗 Ostatnie rozmowy (${Math.min(info.links.length, 10)} z ${info.total_mentions})`,
-        value: truncate(linksText, 1024),
+        name: '🔗 Rozmowy',
+        value: truncate(linksText + suffix, 1024),
       });
     }
 
