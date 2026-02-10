@@ -31,16 +31,43 @@ module.exports = {
     const channel = interaction.client.channels.cache.get(monitoredChannelId);
     if (!channel) {
       return interaction.reply({
-        content: '❌ Nie mogę znaleźć monitorowanego kanału.',
+        content: 'Nie mogę znaleźć monitorowanego kanału.',
         ephemeral: true,
       });
     }
 
-    // Odpowiedz od razu (widoczne tylko dla osoby która uruchomiła)
+    // Odpowiedz od razu (ephemeral)
     await interaction.reply({
-      content: `🔍 Rozpoczynam skanowanie kanału z ostatnich **${days} dni**... Postęp będę wysyłać tutaj.`,
+      content: `Rozpoczynam skanowanie kanału z ostatnich **${days} dni**... Postęp wyślę Ci na DM.`,
       ephemeral: true,
     });
+
+    // Otwórz DM z użytkownikiem do raportowania postępu
+    let dmChannel;
+    try {
+      dmChannel = await interaction.user.createDM();
+      await dmChannel.send(`🔍 Rozpoczynam skanowanie kanału z ostatnich **${days} dni**...`);
+    } catch (e) {
+      logger.error('Cannot open DM with user', e.message);
+      // Fallback - jeśli DM zablokowane, użyj kanału
+      dmChannel = null;
+    }
+
+    // Funkcja do wysyłania/edytowania postępu
+    let progressMsg = null;
+    async function updateProgress(text) {
+      try {
+        if (dmChannel) {
+          if (progressMsg) {
+            await progressMsg.edit(text);
+          } else {
+            progressMsg = await dmChannel.send(text);
+          }
+        }
+      } catch (e) {
+        // cicho ignoruj błędy edycji
+      }
+    }
 
     try {
       const cutoffDate = new Date();
@@ -76,19 +103,14 @@ module.exports = {
       }
 
       if (allMessages.length === 0) {
-        return interaction.editReply({
-          content: `📭 Brak wiadomości do przeanalizowania z ostatnich ${days} dni.`,
-        });
+        await updateProgress(`📭 Brak wiadomości do przeanalizowania z ostatnich ${days} dni.`);
+        return;
       }
 
       // Sortuj chronologicznie
       allMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
-      // Wyślij prywatną wiadomość z postępem (ephemeral - widoczna tylko dla admina)
-      const progressMsg = await interaction.followUp({
-        content: `🔍 Skanowanie: znaleziono **${allMessages.length}** wiadomości. Analizuję...`,
-        ephemeral: true,
-      });
+      await updateProgress(`🔍 Skanowanie: znaleziono **${allMessages.length}** wiadomości. Analizuję...`);
 
       let analyzed = 0;
       let found = 0;
@@ -151,36 +173,44 @@ module.exports = {
 
         analyzed++;
 
-        // Aktualizuj postęp co 50 wiadomości (edytuj wiadomość bota, nie interaction)
+        // Aktualizuj postęp co 50 wiadomości
         if (analyzed % 50 === 0) {
-          await progressMsg.edit(
+          await updateProgress(
             `🔍 Skanowanie: **${analyzed}/${allMessages.length}** — znaleziono ${found} wzmianek${errors > 0 ? ` (${errors} błędów)` : ''}`
-          ).catch(() => {});
+          );
         }
 
         await new Promise((resolve) => setTimeout(resolve, API_DELAY));
       }
 
-      // Podsumowanie - edytuj wiadomość postępu
+      // Podsumowanie
       const embed = new EmbedBuilder()
-        .setTitle('✅ Skanowanie zakończone')
+        .setTitle('Skanowanie zakończone')
         .setColor(0x2ecc71)
         .setDescription([
-          `📊 **Przeanalizowano:** ${analyzed} wiadomości`,
-          `🎯 **Znaleziono wzmianek:** ${found}`,
-          errors > 0 ? `⚠️ **Błędy:** ${errors}` : '',
-          `📅 **Okres:** ostatnie ${days} dni`,
+          `**Przeanalizowano:** ${analyzed} wiadomości`,
+          `**Znaleziono wzmianek:** ${found}`,
+          errors > 0 ? `**Błędy:** ${errors}` : '',
+          `**Okres:** ostatnie ${days} dni`,
           '',
           'Użyj `/podsumowanie` aby zobaczyć wyniki!',
         ].filter(Boolean).join('\n'))
         .setTimestamp();
 
-      await progressMsg.edit({ content: null, embeds: [embed] });
+      if (dmChannel) {
+        if (progressMsg) {
+          await progressMsg.edit({ content: null, embeds: [embed] }).catch(() => {});
+        } else {
+          await dmChannel.send({ embeds: [embed] }).catch(() => {});
+        }
+      }
 
       logger.success(`Backfill completed: ${analyzed} analyzed, ${found} found, ${errors} errors`);
     } catch (error) {
       logger.error('Backfill failed', error.message);
-      await interaction.followUp({ content: '❌ Skanowanie przerwane z powodu błędu. Sprawdź logi.', ephemeral: true }).catch(() => {});
+      if (dmChannel) {
+        await dmChannel.send('Skanowanie przerwane z powodu błędu. Sprawdź logi.').catch(() => {});
+      }
     }
   },
 };
