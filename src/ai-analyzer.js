@@ -149,8 +149,15 @@ WAŻNE ZASADY:
   - "Rodem z Gry o tron" → to porównanie, szukaj głównego tematu w kontekście
   - "Lepsze niż X", "jak w X", "w stylu X", "porównywalne z X" → X to tylko odniesienie, nie główny temat
   - ALE: "Oglądam Grę o tron", "Gra o tron jest super" → tu Gra o tron JEST głównym tematem
-- Kanał jest o kulturze - bądź OTWARTY na wykrywanie tytułów. Nawet krótkie odniesienia się liczą
-- Polskie i angielskie tytuły - oba akceptuj
+- TYTUŁ MUSI BYĆ KONKRETNYM, ISTNIEJĄCYM TYTUŁEM PRODUKCJI. Nie zwracaj:
+  - Opisów: "serial medyczny", "trzeci sezon", "serial o...", "1 sezon"
+  - Imion postaci: "Eren", "Levi", "Eddie", "Jack" - to NIE są tytuły
+  - Nazw platform: "Crunchyroll", "Max", "HBO", "Netflix", "Apple TV"
+  - Nazw franczyz/uniwersów: "MCU", "Star Wars", "DC" - zwracaj KONKRETNY tytuł, nie franczyzę
+  - Skrótów sezonu: "S4", "S2", numery odcinków
+  - Słów ogólnych: "anime", "serial", "film", "sezon"
+  - Jeśli nie potrafisz zidentyfikować KONKRETNEGO tytułu, ustaw is_media_related: false
+- Polskie i angielskie tytuły - oba akceptuj, ale preferuj oficjalną nazwę
 - Jeśli ktoś pisze zdanie o serialu/filmie ale nie wymienia tytułu, sprawdź kontekst poprzednich wiadomości
 - "Rycerz", "Pingwin", "Bialy Lotos" itp. - to mogą być tytuły seriali, rozpoznawaj je
 - Anime traktuj jako "serial"

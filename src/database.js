@@ -286,6 +286,35 @@ function migrateNormalizeTitles() {
 
     // Mobland (literówka)
     ['Moblamd', 'Mobland'],
+
+    // Vinland Saga
+    ['Saga winlandzka', 'Vinland Saga'],
+
+    // Band of Brothers
+    ['Kompania braci', 'Band of Brothers'],
+    ['Bastogne', 'Band of Brothers'],
+
+    // Dept. Q
+    ['Dept Q', 'Dept. Q'],
+
+    // Bron/Broen (dodatkowe)
+    ['Bron/Broen', 'The Bridge'],
+
+    // Dojrzewanie
+    ['Dojrzewanie / Adolescence', 'Dojrzewanie'],
+    ['To dojrzewanie', 'Dojrzewanie'],
+
+    // Dragon Ball (franczyza jako jedno)
+    ['Dragon Ball Z', 'Dragon Ball'],
+    ['Dragon Ball GT', 'Dragon Ball'],
+    ['Dragon Ball Super', 'Dragon Ball'],
+    ['Dragon Ball/Dragon Ball Z', 'Dragon Ball'],
+
+    // Akira (film, ale poprawka nazwy)
+    ['Akire', 'Akira'],
+
+    // Argyle → Argylle
+    ['Argyle', 'Argylle'],
   ];
 
   for (const [fromTitle, toTitle] of knownMerges) {
@@ -312,16 +341,10 @@ function migrateNormalizeTitles() {
 
   // === KROK 3: Napraw błędną klasyfikację (serial → film) ===
   const typeFixesToFilm = [
-    'Sweeney Todd',
-    'Batman & Robin',
-    'First Blood',
-    'Chłopaki nie płaczą',
-    'Amerykański Pie',
-    'Argylle',
-    'Miś',
-    'Troja',
-    'Lamb',
-    'Vinci',
+    'Sweeney Todd', 'Batman & Robin', 'First Blood', 'Chłopaki nie płaczą',
+    'Amerykański Pie', 'Argylle', 'Argyle', 'Miś', 'Troja', 'Lamb', 'Vinci',
+    'Obcy', 'Alien', 'Dług', 'Hejt', 'Before Fall', 'Akira', 'Akire',
+    'Vinci 2', 'A Monster', 'Crossed', 'The Lord of the Rings',
   ];
 
   for (const title of typeFixesToFilm) {
@@ -332,6 +355,49 @@ function migrateNormalizeTitles() {
     if (result.changes > 0) {
       logger.info(`Migration: type fix "${title}" serial → film (${result.changes} records)`);
     }
+  }
+
+  // === KROK 4: Usuń śmieciowe wpisy (noise) ===
+  const noiseToDelete = [
+    // Opisy zamiast tytułów
+    'serial', 'anime', 'Top serial', 'trzeci sezon', '1 sezon', '3 sezon',
+    '5 sezon', '7 sezon', 'Drugi sezon', 'Pierwszy sezon', 'serial medyczny',
+    'serial o wszystkich książkach', 'śledczy serial z dobrą grozą',
+    'Największy sukces tej platformy', 'Serial, który Brad Pitt produkował',
+    'Serial o dwóch ziomkach z wojska…',
+    'Ostatni odcinek poprzedniego sezonu o Hindusce sprzedającej buty',
+    'null', 'nie podano', 'max', 'esport', 'coming out', 'bankow',
+    'albinios', 'Cena', '8', '500', 'IM', 'S4', 'VM', 'ww',
+    // Postacie zamiast seriali
+    'Ned Flaunders', 'Mon Mothma', 'Matsuka', 'Erwin', 'Eddie', 'Levi',
+    'Kurt', 'Kurta', 'Faye', 'Jean', 'Jack', 'Isaac', 'John Gacy',
+    'Eda Gein', 'Gein', 'Ms Casey',
+    // Uniwersa / marki / franczyzy
+    'MCU', 'Kirkman universe', 'Star Wars', 'Gwiezdne wojny',
+    'Baldurs Gate', "Baldur's Gate", 'Malazan', 'Malazan Book of the Fallen',
+    'WWE', 'AEW',
+    // Platformy
+    'Crunchyroll', 'C+', 'Na Maxie', 'Skyshow', 'Alt Shift X',
+    // Podejrzane / noise
+    'Raindeer', 'Terrific', 'Slabizna', 'Kożuchowska', 'Jan Oglądamy',
+    'Koreański ewenement', 'Makra', 'Cavalier', 'Syty Max', 'Sonsi',
+    'Sinnersers', 'Sensible Saiyan', 'Pierre', 'Pat', 'Kuśnierz',
+    'Jegerystów', 'Ginies', 'Ginés',
+  ];
+
+  let totalDeleted = 0;
+  for (const title of noiseToDelete) {
+    const result = db.prepare(
+      'DELETE FROM media_mentions WHERE LOWER(title) = LOWER(?)'
+    ).run(title);
+
+    if (result.changes > 0) {
+      totalDeleted += result.changes;
+      logger.info(`Migration: deleted noise "${title}" (${result.changes} records)`);
+    }
+  }
+  if (totalDeleted > 0) {
+    logger.info(`Migration: total noise deleted: ${totalDeleted} records`);
   }
 }
 
