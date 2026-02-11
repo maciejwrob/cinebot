@@ -401,6 +401,31 @@ function migrateNormalizeTitles() {
     // Rings of Power
     ['Pierścienie Władzy', 'Rings of Power'],
     ['The Lord of the Rings: The Rings of Power', 'Rings of Power'],
+
+    // === FILMY: runda 2 ===
+
+    // Y tu mamá también
+    ['y tu mama tambien', 'Y tu mamá también'],
+
+    // Alien: Romulus
+    ['Alien Romulus', 'Alien: Romulus'],
+
+    // 28 lat później
+    ['28 years later', '28 lat później'],
+
+    // Jedna bitwa po drugiej
+    ['One battle after another', 'Jedna bitwa po drugiej'],
+    ['Jedna bitwa za drugą', 'Jedna bitwa po drugiej'],
+
+    // D&D → Dungeons & Dragons
+    ['D&D', 'Dungeons & Dragons'],
+    ['D&D (Dungeons & Dragons)', 'Dungeons & Dragons'],
+
+    // Władcy Przestworzy → Masters of the Air (serial)
+    ['Władcy Przestworzy', 'Masters of the Air'],
+
+    // Pingwin → The Penguin (serial)
+    ['Pingwin', 'The Penguin'],
   ];
 
   for (const [fromTitle, toTitle] of knownMerges) {
@@ -450,6 +475,11 @@ function migrateNormalizeTitles() {
     'Band of Brothers', 'Pam & Tommy', 'Welcome to Derry', 'Wednesday',
     'Tulsa King', 'Ray Donovan', 'Peaky Blinders', 'Family Guy',
     'Stranger Things', 'Silo', 'Rezerwat', 'Heweliusz', 'Gra o tron',
+    // Runda 2
+    'Wiedźmin', 'Fundacja', 'Dept. Q', 'Dark', 'Breaking Bad',
+    'Better Call Saul', 'Baby Reindeer', 'Deadwood',
+    'Cyberpunk: Edgerunners', 'Community', 'Chłopaki z baraków',
+    'Masters of the Air', 'The Penguin',
     'Rings of Power', 'Black Bird', 'Platonic', 'The Crown', 'The Chosen',
     'The English', 'What We Do in the Shadows', 'Spider-Man: The Animated Series',
     'The Falcon and the Winter Soldier', 'Attack on Titan', 'Demon Slayer',
@@ -546,6 +576,40 @@ function migrateNormalizeTitles() {
     'Najwyższy i najniższy', 'Nieznany', 'Ostry', 'Ogromny',
     'znienacka', 'na kiedyś', 'lek', 'jbc', 'kaz', 'teczki',
     'by 3', 'dwa wcześniejsze', 'druga część', 'Dwójka',
+
+    // === RUNDA 2: filmy ===
+
+    // Gry
+    'Alien Isolation', 'Cyberpunk 2077', 'Crysis', 'Age of Sigmar',
+
+    // Muzyka (nie filmy)
+    'Death',
+
+    // Osoby (nie tytuły)
+    'Adam Sandler', 'Almodóvar', 'Anna Taylor-Joy', 'Baz Luhrmann',
+    'Brigitte Bardot', 'Charlie Sheen', 'Chalamet', 'Clint Eastwood',
+    'Colin Farrell', 'Chris Benoit', 'Bale',
+
+    // Opisy / placeholdery / śmieci
+    'polska komedia romantyczna z Magdaleną Różdżką', 'impresjonizm',
+    'celibat', 'wielki artysta', 'wielka stopa',
+    'ten film tera z Butlerem', 'superhero movie', 'superhero',
+    'ostatni film z cagem jaki widziałam to ten gdzie gra tego profesora',
+    'odtrutka', 'nowy wes', 'no Stephen Graham', 'mother',
+    'mojego ulubionego polskiego filmu',
+    'moja ukochana bajka filmowa z dzieciństwa',
+    'materialists', 'legenda', 'jego syn',
+    'filmy Smarzowskiego', 'filmy Komasy', 'filmy Beli Tarra',
+    'film o dylanie z szalami', 'film Larsa von Triera',
+    'end is near', 'człowiek instytucja', 'comic 2',
+    'biopics', 'biopic jakiegoś mma gościa', 'before fall',
+    'Brak tytułu', '(1993)', "57'", '4', '12 emocjonalnie',
+    '99 dnia', 'Afaik',
+    'Cruise', 'Girl Guide', 'Dom dobry',
+    'Devil May Cry', 'Das Boot',
+
+    // Gry niejednoznaczne → usunąć
+    'Odyseja', 'Odyseusz', 'Odys',
   ];
 
   // Usuń też wpisy zawierające URL-e
