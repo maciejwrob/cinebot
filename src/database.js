@@ -167,20 +167,125 @@ function migrateNormalizeTitles() {
     }
   }
 
-  // === KROK 2: Scal znane polskie/angielskie warianty i skróty ===
+  // === KROK 2: Scal znane polskie/angielskie warianty, skróty i literówki ===
   const knownMerges = [
-    // [wariant do scalenia, kanoniczny tytuł]
+    // Gra o tron
     ['Game of Thrones', 'Gra o tron'],
+
+    // Rycerz siedmiu królestw
     ['Rycerz', 'Rycerz siedmiu królestw'],
     ['Knight of the Seven Kingdoms', 'Rycerz siedmiu królestw'],
     ['A Knight of the Seven Kingdoms', 'Rycerz siedmiu królestw'],
+    ['The Knight of the Seven Kingdoms', 'Rycerz siedmiu królestw'],
+    ['Knight of Seven Kingdoms', 'Rycerz siedmiu królestw'],
+    ['Rycerz z siedmiu królestw', 'Rycerz siedmiu królestw'],
+    ['Rycerz z 7 królestw', 'Rycerz siedmiu królestw'],
+
+    // Ród smoka
     ['House of the Dragon', 'Ród smoka'],
+
+    // Wiedźmin
     ['The Witcher', 'Wiedźmin'],
-    ['Stranger Things', 'Stranger Things'],
-    ['The Last of Us', 'The Last of Us'],
-    ['Breaking Bad', 'Breaking Bad'],
-    ['The White Lotus', 'Biały Lotos'],
-    ['White Lotus', 'Biały Lotos'],
+
+    // Attack on Titan
+    ['Atak Tytanów', 'Attack on Titan'],
+    ['Atak na Titana', 'Attack on Titan'],
+    ['Atak na Shingashinę', 'Attack on Titan'],
+    ['Female Titan', 'Attack on Titan'],
+    ['Eren', 'Attack on Titan'],
+    ['Tytan', 'Attack on Titan'],
+    ['Bitwa o Trast', 'Attack on Titan'],
+
+    // The White Lotus
+    ['Biały Lotos', 'The White Lotus'],
+    ['Bialy Lotos', 'The White Lotus'],
+    ['White Lotus', 'The White Lotus'],
+
+    // The Sopranos
+    ['Rodzina Soprano', 'The Sopranos'],
+    ['Sopranos', 'The Sopranos'],
+
+    // The Righteous Gemstones (literówki)
+    ['Prawi Gemstoni', 'The Righteous Gemstones'],
+    ['Prawi Gemstonowie', 'The Righteous Gemstones'],
+    ['Prawi Gemmstoni', 'The Righteous Gemstones'],
+    ['Prawi Gembstonowie', 'The Righteous Gemstones'],
+    ['Prawe Gemstony', 'The Righteous Gemstones'],
+    ['Prawych Gemstonów', 'The Righteous Gemstones'],
+    ['Prawigemstonowie', 'The Righteous Gemstones'],
+
+    // Shōgun
+    ['Shogun', 'Shōgun'],
+    ['Szogun', 'Shōgun'],
+
+    // The Sandman
+    ['Sandman', 'The Sandman'],
+
+    // The Office PL
+    ['The Office', 'The Office PL'],
+    ['Polski Office', 'The Office PL'],
+
+    // Slow Horses
+    ['Kulawe Konie', 'Slow Horses'],
+    ['Kulawi Konie', 'Slow Horses'],
+
+    // Chernobyl
+    ['Czarnobyl', 'Chernobyl'],
+    ['Czernobyl', 'Chernobyl'],
+
+    // Jack Ryan
+    ["Tom Clancy's Jack Ryan", 'Jack Ryan'],
+    ['Jacek Ryan', 'Jack Ryan'],
+
+    // Rick and Morty
+    ['Rick i Morty', 'Rick and Morty'],
+
+    // Alice in Borderland
+    ['Alice in Borderlands', 'Alice in Borderland'],
+
+    // Daredevil
+    ['Daredevil Born Again', 'Daredevil'],
+    ['Daredevil: Born Again', 'Daredevil'],
+    ['DD', 'Daredevil'],
+
+    // How I Met Your Mother
+    ['HIMYM', 'How I Met Your Mother'],
+
+    // Czarny Ptak to Black Bird (NIE Chernobyl)
+    ['Czarny Ptak', 'Black Bird'],
+
+    // The Boys
+    ['Boys', 'The Boys'],
+
+    // The Blacklist
+    ['Blacklist', 'The Blacklist'],
+
+    // The Bridge / Most nad Sundem
+    ['Bron', 'The Bridge'],
+    ['Broen', 'The Bridge'],
+    ['Most nad Sundem', 'The Bridge'],
+
+    // Sons of Anarchy
+    ['Synowie Anarchii', 'Sons of Anarchy'],
+
+    // Black Mirror
+    ['Czarne lustro', 'Black Mirror'],
+
+    // The Mandalorian
+    ['Mandalorian', 'The Mandalorian'],
+
+    // Obi-Wan Kenobi
+    ['Obi Wan Kenobi', 'Obi-Wan Kenobi'],
+
+    // Machos Alfa
+    ['Machos alfa', 'Machos Alfa'],
+
+    // The Affair
+    ['Afair', 'The Affair'],
+    ['Affair', 'The Affair'],
+
+    // Mobland (literówka)
+    ['Moblamd', 'Mobland'],
   ];
 
   for (const [fromTitle, toTitle] of knownMerges) {
@@ -202,6 +307,30 @@ function migrateNormalizeTitles() {
       db.prepare(
         'INSERT OR IGNORE INTO title_aliases (alias, canonical_title) VALUES (?, ?)'
       ).run(fromTitle, toTitle);
+    }
+  }
+
+  // === KROK 3: Napraw błędną klasyfikację (serial → film) ===
+  const typeFixesToFilm = [
+    'Sweeney Todd',
+    'Batman & Robin',
+    'First Blood',
+    'Chłopaki nie płaczą',
+    'Amerykański Pie',
+    'Argylle',
+    'Miś',
+    'Troja',
+    'Lamb',
+    'Vinci',
+  ];
+
+  for (const title of typeFixesToFilm) {
+    const result = db.prepare(
+      "UPDATE media_mentions SET type = 'film' WHERE LOWER(title) = LOWER(?) AND type = 'serial'"
+    ).run(title);
+
+    if (result.changes > 0) {
+      logger.info(`Migration: type fix "${title}" serial → film (${result.changes} records)`);
     }
   }
 }
