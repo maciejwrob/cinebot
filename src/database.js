@@ -315,6 +315,92 @@ function migrateNormalizeTitles() {
 
     // Argyle → Argylle
     ['Argyle', 'Argylle'],
+
+    // === FILMY: duplikaty / warianty ===
+
+    // Alien
+    ['Obcy', 'Alien'],
+    ['Obcy Romulus', 'Alien: Romulus'],
+
+    // Naga broń
+    ['Naked Gun', 'Naga broń'],
+    ['Nagie pistolety', 'Naga broń'],
+
+    // 12 Angry Men
+    ['12 gniewnych ludzi', '12 Angry Men'],
+    ['Dwunastu gniewnych ludzi', '12 Angry Men'],
+
+    // Rogue One
+    ['Rogue One', 'Rogue One: A Star Wars Story'],
+    ['Łotr 1', 'Rogue One: A Star Wars Story'],
+    ['Rogue 1', 'Rogue One: A Star Wars Story'],
+
+    // Requiem for a Dream
+    ['Requiem', 'Requiem for a Dream'],
+
+    // Call Me by Your Name
+    ['Tamte dni, tamte noce', 'Call Me by Your Name'],
+
+    // Three Billboards
+    ['Trzy billboardy za Ebbing, Missouri', 'Three Billboards Outside Ebbing, Missouri'],
+    ['Trzy billboardy', 'Three Billboards Outside Ebbing, Missouri'],
+
+    // Dune
+    ['Diuna', 'Dune'],
+    ['Diuny', 'Dune'],
+
+    // Mickey 17
+    ['Mickey17', 'Mickey 17'],
+
+    // Rocketman
+    ['Rocket Man', 'Rocketman'],
+
+    // True Romance
+    ['Prawdziwy romans', 'True Romance'],
+
+    // The Thin Red Line
+    ['Cienka czerwona linia', 'The Thin Red Line'],
+
+    // Dunkirk
+    ['Dunkierka', 'Dunkirk'],
+
+    // Dungeons & Dragons
+    ['Dungeons and Dragons', 'Dungeons & Dragons'],
+
+    // Mr. Vampire
+    ['Mr Vampire', 'Mr. Vampire'],
+
+    // Highlander
+    ['Nieśmiertelny', 'Highlander'],
+    ['Nieśmiertelny (Highlander)', 'Highlander'],
+
+    // Prey
+    ['Predator: Prey', 'Prey'],
+
+    // Notting Hill (literówka)
+    ['Nothing Hill', 'Notting Hill'],
+
+    // Nagi instynkt
+    ['Nagiego instynktu', 'Nagi instynkt'],
+
+    // Zwierzogród 2
+    ['Zwierzograd 2', 'Zwierzogród 2'],
+
+    // Silo (serial, ale poprawka nazwy)
+    ['Silos', 'Silo'],
+
+    // Mobbland → Mobland
+    ['Mobbland', 'Mobland'],
+
+    // San Junipero → Black Mirror (to odcinek)
+    ['San Junipero', 'Black Mirror'],
+
+    // Dexter: New Blood
+    ['New Blood', 'Dexter: New Blood'],
+
+    // Rings of Power
+    ['Pierścienie Władzy', 'Rings of Power'],
+    ['The Lord of the Rings: The Rings of Power', 'Rings of Power'],
   ];
 
   for (const [fromTitle, toTitle] of knownMerges) {
@@ -357,33 +443,113 @@ function migrateNormalizeTitles() {
     }
   }
 
-  // === KROK 4: Usuń śmieciowe wpisy (noise) ===
+  // === KROK 4: Napraw błędną klasyfikację (film → serial) ===
+  const typeFixesToSerial = [
+    'Andor', 'Squid Game', 'Mobland', 'Reacher', 'Fallout', 'Shrinking',
+    'The Sopranos', 'The White Lotus', 'The Office PL', 'Slow Horses',
+    'Band of Brothers', 'Pam & Tommy', 'Welcome to Derry', 'Wednesday',
+    'Tulsa King', 'Ray Donovan', 'Peaky Blinders', 'Family Guy',
+    'Stranger Things', 'Silo', 'Rezerwat', 'Heweliusz', 'Gra o tron',
+    'Rings of Power', 'Black Bird', 'Platonic', 'The Crown', 'The Chosen',
+    'The English', 'What We Do in the Shadows', 'Spider-Man: The Animated Series',
+    'The Falcon and the Winter Soldier', 'Attack on Titan', 'Demon Slayer',
+    'Dexter: New Blood', 'Black Mirror',
+  ];
+
+  for (const title of typeFixesToSerial) {
+    const result = db.prepare(
+      "UPDATE media_mentions SET type = 'serial' WHERE LOWER(title) = LOWER(?) AND type = 'film'"
+    ).run(title);
+
+    if (result.changes > 0) {
+      logger.info(`Migration: type fix "${title}" film → serial (${result.changes} records)`);
+    }
+  }
+
+  // === KROK 5: Usuń śmieciowe wpisy (noise) ===
   const noiseToDelete = [
-    // Opisy zamiast tytułów
+    // --- Z seriali ---
     'serial', 'anime', 'Top serial', 'trzeci sezon', '1 sezon', '3 sezon',
     '5 sezon', '7 sezon', 'Drugi sezon', 'Pierwszy sezon', 'serial medyczny',
     'serial o wszystkich książkach', 'śledczy serial z dobrą grozą',
     'Największy sukces tej platformy', 'Serial, który Brad Pitt produkował',
     'Serial o dwóch ziomkach z wojska…',
     'Ostatni odcinek poprzedniego sezonu o Hindusce sprzedającej buty',
-    'null', 'nie podano', 'max', 'esport', 'coming out', 'bankow',
+    'null', 'nie podano', 'esport', 'coming out', 'bankow',
     'albinios', 'Cena', '8', '500', 'IM', 'S4', 'VM', 'ww',
-    // Postacie zamiast seriali
     'Ned Flaunders', 'Mon Mothma', 'Matsuka', 'Erwin', 'Eddie', 'Levi',
     'Kurt', 'Kurta', 'Faye', 'Jean', 'Jack', 'Isaac', 'John Gacy',
     'Eda Gein', 'Gein', 'Ms Casey',
-    // Uniwersa / marki / franczyzy
     'MCU', 'Kirkman universe', 'Star Wars', 'Gwiezdne wojny',
     'Baldurs Gate', "Baldur's Gate", 'Malazan', 'Malazan Book of the Fallen',
     'WWE', 'AEW',
-    // Platformy
     'Crunchyroll', 'C+', 'Na Maxie', 'Skyshow', 'Alt Shift X',
-    // Podejrzane / noise
     'Raindeer', 'Terrific', 'Slabizna', 'Kożuchowska', 'Jan Oglądamy',
     'Koreański ewenement', 'Makra', 'Cavalier', 'Syty Max', 'Sonsi',
     'Sinnersers', 'Sensible Saiyan', 'Pierre', 'Pat', 'Kuśnierz',
     'Jegerystów', 'Ginies', 'Ginés',
+
+    // --- Z filmów: platformy/studia ---
+    'YouTube', 'A24', 'Skyshowtime', 'Prime Video', 'Showtime', 'letterboxd',
+    'Peacock',
+
+    // --- Z filmów: linki / identyfikatory ---
+    'FEu7xIEaXWo', 'Th9c7hSY8Mo', 'EOwTdTZA8D8',
+
+    // --- Z filmów: osoby (reżyserzy/aktorzy) ---
+    'Kurosawa', 'Guy Ritchie', 'Spike Lee', 'Robert Redford', 'Jordan Peele',
+    'Tom Cruise', 'Terence Stamp', 'Sofia Boutella', 'Emily Blunt',
+    'Ethan Hawke', 'Idris Elba', 'Jon Hamm', 'John Woo', 'Béla Tarr',
+    'Belmondo', 'Jean-Paul Belmondo', 'Taika', 'Nolan', 'Gareth Evans',
+    'Shaw Levy', 'Snyderverse', 'Almodovar', 'Egerton', 'Odessa Young', 'Kidman',
+
+    // --- Z filmów: muzyka/artyści ---
+    'Jane Remover', 'Eminem', 'Rasmentalism', 'Quebó', 'Vader', 'Verba',
+
+    // --- Z filmów: gry ---
+    'Death Stranding', 'Bóg Wojny: Ragnarök', 'Monkey Island', 'Minecraft',
+    'Metal Gear', 'Metal Gear Solid', 'Prince of Persia: Dwa Oblicza Czasu',
+    'Kratos',
+
+    // --- Z filmów: franczyzy/uniwersa ---
+    'Marvel', 'Marvel Studios', 'Marvel Cinematic Universe',
+    'Marvel Cinematic Universe (MCU)', 'James Bond', 'Harry Potter',
+    'Władca Pierścieni', 'The Lord of the Rings',
+    'Liga Sprawiedliwości', 'Justice League',
+
+    // --- Z filmów: opisy/placeholder ---
+    'jedynka', 'pierwsza część', 'część3', 'top film',
+    'Best Movies of the 21st Century', 'Filmy Gaspara Noe',
+    'Filmy Rubena Östlunda', 'Filmografia Akiry Kurosawy',
+    'Filmy studia Ghibli', 'Filmy o The Beatles',
+    'film z nicole kidman', 'To jest film z nicole kidman',
+    'hiszpanski film', 'duński', 'nowy film Smarzowskiego',
+    'nowy Szpielberg', 'nowa trylogia', 'remake',
+    'przygoda polskiej kadry w korei', 'polskie filmy',
+    'klasyki b-klasowego kina lat 80-tych',
+    'najsmieszniejszy film jaki powstal', 'ostatni film z cagem...',
+    'Film, który wygrał festiwal w Gdyni', 'Film z napisami',
+    'Film dokumentalny o sekretnym ślubie',
+    'Film, o którym wspomina się w wiadomości',
+    '[Film wskazany przez link]', 'Tytuł filmu',
+    'Obraz', 'Obraz/impresjonizm/SZTUKA',
+    "Stan's 2025", 'Hollywood 2025',
+    'Oscary', 'Oscar za reżyserię',
+    'Przemiany społeczno-kulturowe lat 60 i 70',
+    'Poznań z okresu przedwojennego', 'Góry Świętokrzyskie',
+
+    // --- Z filmów: podejrzane / noise ---
+    'Superman Gunna', 'Scenes from beans', 'Rocznice',
+    'Mietek', 'Mietka', 'Gosling', 'Viggo', 'Hopper',
+    'Kompania', 'Kapitan', 'Kowboj', 'Włodzimierz',
+    'Wybitny człowiek', 'Wykład', 'Wielki Polak',
+    'Najwyższy i najniższy', 'Nieznany', 'Ostry', 'Ogromny',
+    'znienacka', 'na kiedyś', 'lek', 'jbc', 'kaz', 'teczki',
+    'by 3', 'dwa wcześniejsze', 'druga część', 'Dwójka',
   ];
+
+  // Usuń też wpisy zawierające URL-e
+  db.prepare("DELETE FROM media_mentions WHERE title LIKE 'http%'").run();
 
   let totalDeleted = 0;
   for (const title of noiseToDelete) {
