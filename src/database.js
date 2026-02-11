@@ -426,6 +426,27 @@ function migrateNormalizeTitles() {
 
     // Pingwin → The Penguin (serial)
     ['Pingwin', 'The Penguin'],
+
+    // === FILMY: runda 3 ===
+
+    // Avatar
+    ['Avatar 2', 'Avatar: The Way of Water'],
+
+    // Avengers
+    ['Avengers Doomsday', 'Avengers: Doomsday'],
+    ['Avengers: Doomsday Secret Wars', 'Avengers: Secret Wars'],
+
+    // Ballerina (literówka)
+    ['Ballierina', 'Ballerina'],
+
+    // The Ballad of a Small Player
+    ['Ballad of a small player', 'The Ballad of a Small Player'],
+
+    // American Pie
+    ['Amerykański Pie', 'American Pie'],
+
+    // Blue Eye Samurai
+    ['Blue eyed samurai', 'Blue Eye Samurai'],
   ];
 
   for (const [fromTitle, toTitle] of knownMerges) {
@@ -484,6 +505,9 @@ function migrateNormalizeTitles() {
     'The English', 'What We Do in the Shadows', 'Spider-Man: The Animated Series',
     'The Falcon and the Winter Soldier', 'Attack on Titan', 'Demon Slayer',
     'Dexter: New Blood', 'Black Mirror',
+    // Runda 3
+    'Vinland Saga', 'Rick and Morty', 'Obi-Wan Kenobi',
+    'Blue Eye Samurai', 'Pachinko',
   ];
 
   for (const title of typeFixesToSerial) {
@@ -610,6 +634,52 @@ function migrateNormalizeTitles() {
 
     // Gry niejednoznaczne → usunąć
     'Odyseja', 'Odyseusz', 'Odys',
+
+    // === RUNDA 3: filmy ===
+
+    // Osoby / nazwiska
+    'Fincher', 'Kubrick', 'Dylan', 'Demi Moore', 'Hulk Hogan',
+    'Momoa', 'Havertz', 'Iga Lis', 'Maciej Terlecki', 'Borysewicz',
+    'Dubiel', 'Douglas', 'Kinnear', 'Grisham', 'Sanderson',
+
+    // Marki / platformy / kanały
+    'Disney', 'Culture Crave', 'D+', 'MI', 'GT', 'DMC',
+    'Dodgers', 'Scientologia', 'Recka Kinomaniaka',
+    'Reasons I\'m Broke',
+
+    // Uniwersa / postacie / komiksy
+    'Han Solo', 'Bond', 'Silmarillion', 'Ultimates', 'Young Avengers',
+    'Secret Wars', 'Battleworld', 'Brainiac',
+    'Mr. Miracle and The New Gods', 'Old Man Logan',
+    'Batman: Beyond White Knight', 'Batman vs. Deadpool',
+    'Marvels The Avengers', 'Marvel Spotlight/Streetlight',
+
+    // Notatki / opisy / kategorie
+    'Żuławskiego coś?', 'Zły zły', 'Amnezja/utrata pamięci',
+    'Ekranizacja niezależnego horroru', 'Dziwne projekty Cage\'a',
+    'Dylana z szalami', 'Dylan w szalach',
+    'Dostałem od ojca pod choinkę', 'Doskonały film',
+    'Blade Runner, Pieśń Lodu i Ognia',
+    'Filmy J.E Paula Thomasa Andersona', 'Batmany Burtona',
+    'Przemiany społeczno - kulturowe lat 60 i 70',
+    'Coś się na ciebie znajdzie Numer Raz',
+    'Cell vs Goku', 'Goku vs Ginyu',
+    'Defenders of Jerusalem', 'The Serfs TV',
+    'The Sheep Detective', 'The Draconian Times',
+    'The kidnapping of the sun and the moon',
+    'Werewolf by Night',
+
+    // Losowe / śmieciowe tokeny
+    'Nahorny', 'Hermosa', 'Hazel', 'Hideo', 'Hallucigenia',
+    'Cavelli', 'Casandra', 'Cameo', 'Carry', 'Ciplony',
+    'Chaytonowie', 'Chadsudski', 'Flintini', 'Feanor', 'Feanora',
+    'Sojuniczków', 'Mysliwski', 'Olszówka',
+    'Jerry Manchester aka Roofman', 'Marsal', 'Marszałek Knaga',
+    'Magnificent moustache', 'Magical Negro',
+    'Bednarka i Beatki', 'Gołoborze', 'Kosmici przylecieli',
+    'Krawiec Swiebodzki', 'Jama Michalikowa', 'Jaskier',
+    'Agent', 'Aborcja', 'A Monster',
+    'Kebab. Narodowe danie Polaków',
   ];
 
   // Usuń też wpisy zawierające URL-e
